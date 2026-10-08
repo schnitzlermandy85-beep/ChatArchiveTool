@@ -21,7 +21,7 @@ class PlatformSupportTests(unittest.TestCase):
             self.assertEqual(support.data_root('/Applications/ChatArchiveTool.app/Contents/Resources'), Path('/Users/example/Library/Application Support/ChatArchiveTool'))
 
     def test_frozen_windows_data_uses_local_appdata(self):
-        with patch.dict(os.environ, {'LOCALAPPDATA': '/tmp/user-local'}, clear=True), patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'platform', 'win32'):
+        with patch.dict(os.environ, {'LOCALAPPDATA': '/tmp/user-local'}, clear=True), patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'platform', 'win32'), patch.object(Path, 'home', side_effect=RuntimeError('No home available')):
             self.assertEqual(support.data_root('/readonly/install'), Path('/tmp/user-local/ChatArchiveTool'))
 
     def test_source_and_explicit_data_locations(self):
@@ -90,9 +90,14 @@ class PlatformSupportTests(unittest.TestCase):
     def test_actual_command_launcher(self):
         with tempfile.TemporaryDirectory() as temp:
             result = subprocess.run(['bash', str(core.ROOT / 'start.command'), '--check'],
-                env={**os.environ, 'CHATARCHIVE_DATA_DIR': temp}, capture_output=True, text=True, timeout=30)
+                env={**os.environ, 'CHATARCHIVE_DATA_DIR': temp, 'CHATARCHIVE_PYTHON': sys.executable},
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('Startup check passed', result.stdout)
+            failed = subprocess.run(['bash', str(core.ROOT / 'start.command'), '--check'],
+                env={**os.environ, 'CHATARCHIVE_PYTHON': str(Path(temp) / 'missing-python')},
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(failed.returncode, 0)
 
 
 if __name__ == '__main__':

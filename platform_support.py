@@ -18,8 +18,8 @@ def data_root(source_root):
     if sys.platform == 'darwin':
         return Path.home() / 'Library/Application Support/ChatArchiveTool'
     if sys.platform == 'win32':
-        return Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'ChatArchiveTool'
-    return Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share')) / 'ChatArchiveTool'
+        return Path(os.environ.get('LOCALAPPDATA') or Path.home() / 'AppData/Local') / 'ChatArchiveTool'
+    return Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share') / 'ChatArchiveTool'
 
 
 def wechat_supported():

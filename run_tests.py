@@ -3,6 +3,10 @@ import pathlib
 import sys
 import unittest
 
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, 'reconfigure'):
+        stream.reconfigure(encoding='utf-8', errors='backslashreplace')
+
 root = pathlib.Path(__file__).resolve().parent
 packages = root / '.wechat-packages'
 if packages.is_dir():

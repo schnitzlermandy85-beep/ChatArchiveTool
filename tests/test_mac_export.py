@@ -56,7 +56,7 @@ class MacExportTests(unittest.TestCase):
     def test_full_multishard_export_keeps_real_sender_ids_and_601_plus_messages(self):
         with patch('mac_wechat.run_wxvault', side_effect=self.backend), patch('mac_wechat.own_username',return_value='wxid_me'):
             source=mac.export_wechat_mac('好友',self.root/'out',log=lambda _:None)
-        exported=json.loads(source.read_text())
+        exported=json.loads(source.read_text(encoding='utf-8'))
         self.assertEqual(exported['message_count'],602)
         self.assertEqual({r['sender_username'] for r in exported['messages']},{'wxid_me','wxid_peer'})
         self.assertTrue(any(r['is_self'] for r in exported['messages']))
@@ -68,7 +68,7 @@ class MacExportTests(unittest.TestCase):
     def test_dates_use_epoch_filter_and_no_default_recent_limit(self):
         with patch('mac_wechat.run_wxvault',side_effect=self.backend):
             source=mac.export_wechat_mac('wxid_peer',self.root/'out',filters={'startTime':1200,'endTime':1405},log=lambda _:None)
-        rows=json.loads(source.read_text())['messages']
+        rows=json.loads(source.read_text(encoding='utf-8'))['messages']
         self.assertEqual(len(rows),107)
         self.assertTrue(all(1200<=r['timestamp']<=1405 for r in rows))
 

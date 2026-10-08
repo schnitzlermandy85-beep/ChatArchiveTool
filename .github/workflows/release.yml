@@ -35,6 +35,9 @@ jobs:
         run: python run_tests.py
       - name: Frontend behavior
         run: node tests/ui_smoke.cjs
+      - name: Verify official Mac exporter packages without login
+        if: matrix.name == 'macOS-AppleSilicon'
+        run: python scripts/verify_export_components.py
       - name: Build and smoke-test desktop package
         env:
           BUILD_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'dev' }}
