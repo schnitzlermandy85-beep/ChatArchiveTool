@@ -12,10 +12,19 @@ def child_python():
  return str(console) if exe.name.lower()=='pythonw.exe' and console.is_file() else str(exe)
 
 
+def child_command(helper, *args):
+ import sys
+ if helper not in ('filepicker', 'wechat_worker'):raise ValueError('Unknown helper')
+ if getattr(sys, 'frozen', False):return [sys.executable, '--helper', helper, *map(str,args)]
+ return [child_python(), str(ROOT/(helper+'.py')), *map(str,args)]
+
+
 def write_json(path,data):
  path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_suffix(path.suffix+'.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');tmp.replace(path)
 def safe_child(root,name):
- root=pathlib.Path(root).resolve();p=(root/name).resolve()
+ name=str(name)
+ if pathlib.PureWindowsPath(name).drive or pathlib.PureWindowsPath(name).root:raise ValueError('非法文件路径')
+ root=pathlib.Path(root).resolve();p=(root/name.replace('\\','/')).resolve()
  if not p.is_relative_to(root):raise ValueError('非法文件路径')
  return p
 

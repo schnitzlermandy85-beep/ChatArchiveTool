@@ -2,10 +2,11 @@
 from __future__ import annotations
 import datetime,hashlib,json,mimetypes,os,pathlib,re,secrets,subprocess,sys,threading,time,urllib.parse,webbrowser
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
-from core import ROOT,QCE,bundle,Cancelled,safe_child,child_python
+from core import ROOT,QCE,bundle,Cancelled,safe_child,child_command
 from wechat_adapter import export_wechat,bundle_wechat,runtime_path
 from relationship import inspect_archive,prepare_analysis,analyze_prepared
 from relationship_report import write_report
+from platform_support import data_root,wechat_supported,require_wechat_support,open_folder,voice_available
 
 def model_path():
  for root in [ROOT/'models',ROOT.parent.parent/'work/voice-runtime/models']:
@@ -28,7 +29,7 @@ class Controller:
  def __init__(self):
   self.lock=threading.RLock();self.stop=threading.Event();self.last=None;self.sessions=[];self.token='';self.logs=[];self.seq=0
   self.analysis_last=None;self.analysis_preview=None
-  self.state={'busy':False,'operation':None,'status':'ready','stage':'准备好后，开始创建你的聊天档案。','progress':None,'messageCount':None,'voiceCount':None,'result':False,'summary':None,'connection':'未连接','wechatReady':(runtime_path()/'wechatauto').exists()}
+  self.state={'busy':False,'operation':None,'status':'ready','stage':'准备好后，开始创建你的聊天档案。','progress':None,'messageCount':None,'voiceCount':None,'result':False,'summary':None,'connection':'未连接','wechatSupported':wechat_supported(),'wechatReady':wechat_supported() and (runtime_path()/'wechatauto').exists()}
   self.state.update(analysisArchive='',analysisResult=False,analysisReportUrl='',analysisSummary=None)
   security=pathlib.Path.home()/'.qq-chat-exporter/security.json'
   if security.exists():
@@ -89,6 +90,7 @@ class Controller:
    if roaming and (int(peer['chatType'])!=1 or len(filters)!=2):raise ValueError('私聊漫游需要填写完整日期范围')
    identity=[platform,peer['chatType'],peer['peerUid'],filters]
   elif mode=='direct':
+   require_wechat_support()
    if not keyword:raise ValueError('请填写微信好友准确备注、昵称或群名')
    if dbdir and not pathlib.Path(dbdir).is_dir():raise ValueError('微信数据目录不存在')
    if not (runtime_path()/'wechatauto').exists():raise ValueError('请先在高级设置中安装微信组件')
@@ -168,12 +170,13 @@ class Controller:
    self.launch('analyze',job)
    self.analysis_preview=None
  def install(self):
+  require_wechat_support()
   def job():
    from setup_wechat import install
    def log(s):
     if self.stop.is_set():raise Cancelled('安装已停止，可重新安装继续')
     self.log(s)
-   install(ROOT/'.wechat-packages',log)
+   install(data_root(ROOT)/'.wechat-packages',log)
    with self.lock:self.state.update(wechatReady=True,status='installed',stage='微信组件已就绪，可以开始导出。',progress=100)
   self.launch('install',job)
  def cancel(self):
@@ -201,7 +204,7 @@ def make_server(controller=None,port=0):
    elif path in ('/style.css','/app.js'):
     f=ROOT/'web'/path[1:];self.send(200,f.read_bytes(),'text/css; charset=utf-8' if path.endswith('css') else 'text/javascript; charset=utf-8')
    elif path=='/api/state' and self.authenticated():self.send(200,controller.snapshot())
-   elif path=='/api/config' and self.authenticated():self.send(200,{'output':str(ROOT/'exports'),'model':model_path(),'address':'http://127.0.0.1:40653','tokenDetected':bool(controller.token),'wechatReady':controller.state['wechatReady']})
+   elif path=='/api/config' and self.authenticated():self.send(200,{'output':str(data_root(ROOT)/'exports'),'wechatSupported':wechat_supported(),'voiceAvailable':voice_available(),'model':model_path(),'address':'http://127.0.0.1:40653','tokenDetected':bool(controller.token),'wechatReady':controller.state['wechatReady']})
    elif path.startswith('/archive/') or path.startswith('/analysis/'):
     cookie=self.headers.get('Cookie','')
     analysis_route=path.startswith('/analysis/')
@@ -232,12 +235,12 @@ def make_server(controller=None,port=0):
     elif path=='/api/browse':
      kind=p.get('kind');category=p.get('category','messages')
      if kind not in ('folder','file') or category not in ('messages','zip','model','output','db'):raise ValueError('选择器类型不正确')
-     result=subprocess.run([child_python(),str(ROOT/'filepicker.py'),kind,category],capture_output=True,text=True,encoding='utf-8',env={**os.environ,'PYTHONIOENCODING':'utf-8'},creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),timeout=300)
+     result=subprocess.run(child_command('filepicker',kind,category),capture_output=True,text=True,encoding='utf-8',env={**os.environ,'PYTHONIOENCODING':'utf-8'},creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),timeout=300)
      if result.returncode:raise ValueError('文件选择器未能打开，请在输入框中填写路径')
      self.send(200,{'path':json.loads(result.stdout)});return
     elif path=='/api/open-folder':
      if controller.last is None:raise ValueError('还没有完成的档案')
-     os.startfile(str(controller.last))
+     open_folder(controller.last)
     elif path=='/api/shutdown':
      controller.stop.set()
      def close():
@@ -251,6 +254,7 @@ def make_server(controller=None,port=0):
 
 def browser_candidates():
  # Prefer a known installed browser instead of relying solely on URL association.
+ if sys.platform != 'win32':return []
  bases=[pathlib.Path(os.environ.get('PROGRAMFILES(X86)','C:/Program Files (x86)')),pathlib.Path(os.environ.get('PROGRAMFILES','C:/Program Files')),pathlib.Path(os.environ.get('LOCALAPPDATA',str(pathlib.Path.home()/'AppData/Local')))]
  return [p for base in bases for suffix in ('Microsoft/Edge/Application/msedge.exe','Google/Chrome/Application/chrome.exe') if (p:=base/suffix).is_file()]
 
@@ -273,9 +277,10 @@ def run(open_browser=True):
  server=make_server();url=f'http://127.0.0.1:{server.server_port}/'
  print('ChatArchive: '+url,flush=True)
  try:
-  (ROOT/'logs').mkdir(exist_ok=True)
-  (ROOT/'logs/current-url.txt').write_text(url+'\n',encoding='utf-8')
-  (ROOT/'打开界面.html').write_text('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url='+url+'"><title>打开 ChatArchive</title><p>请保持启动窗口运行。<a href="'+url+'">打开聊天工具</a></p></html>',encoding='utf-8')
+  writable=data_root(ROOT)
+  (writable/'logs').mkdir(parents=True,exist_ok=True)
+  (writable/'logs/current-url.txt').write_text(url+'\n',encoding='utf-8')
+  (writable/'打开界面.html').write_text('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url='+url+'"><title>打开 ChatArchive</title><p>请保持启动窗口运行。<a href="'+url+'">打开聊天工具</a></p></html>',encoding='utf-8')
  except OSError:pass
  print('Keep this window open. If no browser opens, paste the address above into a browser.',flush=True)
  def launch_browser():

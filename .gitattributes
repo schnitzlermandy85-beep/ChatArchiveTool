@@ -8,3 +8,5 @@
 *.cmd text eol=crlf
 *.txt text eol=lf
 *.jsonl text eol=lf
+*.command text eol=lf
+*.spec text eol=lf

@@ -2,13 +2,16 @@
 from __future__ import annotations
 import pathlib,json,subprocess,sys,os,queue,threading,hashlib,shutil,datetime
 from collections import Counter
-from core import ROOT,Cancelled,Transcriber,write_json,safe_child,emojis,save_archive,child_python
+from core import ROOT,Cancelled,Transcriber,write_json,safe_child,emojis,save_archive,child_command
+
+from platform_support import data_root,require_wechat_support
 
 def runtime_path():
- local=ROOT/'.wechat-packages'
- return local if local.exists() else ROOT.parent.parent/'work/wechat-runtime/packages'
+ local=data_root(ROOT)/'.wechat-packages'
+ return local if local.exists() or getattr(sys,'frozen',False) else ROOT.parent.parent/'work/wechat-runtime/packages'
 
 def export_wechat(keyword,dest,db_dir='',log=print,stop=None,filters=None):
+ require_wechat_support()
  stop=stop or threading.Event();dest=pathlib.Path(dest).resolve();dest.mkdir(parents=True,exist_ok=True)
  if not keyword.strip():raise ValueError('请输入微信好友准确备注、昵称、wxid或群名')
  if not (runtime_path()/'wechatauto').exists():raise RuntimeError('微信导出依赖尚未安装，请先点击“安装微信组件”')
@@ -16,7 +19,7 @@ def export_wechat(keyword,dest,db_dir='',log=print,stop=None,filters=None):
  write_json(request,{'keyword':keyword.strip(),'out':str(dest/'source'),'db_dir':db_dir or None,'cancel':str(cancel),'runtime':str(runtime_path()),'filters':filters or {}})
  env=os.environ.copy();env['PYTHONIOENCODING']='utf-8';env['PYTHONUTF8']='1'
  events=queue.Queue()
- process=subprocess.Popen([child_python(),str(ROOT/'wechat_worker.py'),str(request)],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace',env=env,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+ process=subprocess.Popen(child_command('wechat_worker',request),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace',env=env,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
  def reader():
   try:
    for line in process.stdout:events.put(line.rstrip())

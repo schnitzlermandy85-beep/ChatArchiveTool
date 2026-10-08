@@ -4,7 +4,7 @@
 
 把 QQ／微信聊天记录整理成可离线回看的档案，再从朋友、亲人、恋人或闺蜜／亲密朋友的视角，观察互动方式与双方的表达形象。
 
-`Windows x64` · `Python 3.12` · `本地基础分析` · `可选 AI API`
+`Windows x64 / macOS` · `桌面包免装 Python` · `本地基础分析` · `可选 AI API`
 
 [快速开始](#快速开始) · [报告内容](#报告包含什么) · [心理学框架](#四类关系与心理学框架) · [开发文档](#开发与验证)
 
@@ -45,26 +45,46 @@ flowchart LR
 
 ## 快速开始
 
-环境：**Windows x64、Python 3.12（包含 Tkinter）和浏览器**。本地基础分析与 AI 调用只使用 Python 标准库，可以直接体验。
+### 下载桌面版（推荐）
 
-1. 下载仓库 ZIP 并完整解压，或克隆仓库。
-2. 进入项目根目录，双击 `start.cmd`，保持启动窗口运行。
-3. 进入“关系分析”，选择 [`examples/synthetic-chat`](examples/synthetic-chat)。
-4. 读取档案，确认哪位是你，选择关系，生成本地报告。
+打开 [Releases 下载页面](https://github.com/schnitzlermandy85-beep/ChatArchiveTool/releases)，在同一版本的 **Assets** 中按电脑选择：
 
-示例聊天完全由程序合成，不含真实个人数据。也可下载 [`examples/sample-report.html`](examples/sample-report.html)，用浏览器打开，查看本地报告的排版与图表。
+| 电脑 | 下载文件 | 启动方式 |
+| --- | --- | --- |
+| Windows 64 位 | `ChatArchiveTool-v版本-Windows-x64.zip` | 完整解压，打开 `ChatArchiveTool/ChatArchiveTool.exe` |
+| Mac，Apple 芯片（M 系列） | `ChatArchiveTool-v版本-macOS-AppleSilicon.zip` | 解压，把 `ChatArchiveTool.app` 拖到“应用程序”后双击 |
+| Mac，Intel 芯片 | `ChatArchiveTool-v版本-macOS-Intel.zip` | 解压，把 `ChatArchiveTool.app` 拖到“应用程序”后双击 |
 
-```powershell
+Mac 可在苹果菜单 →“关于本机”查看芯片类型。下载带系统名称的 ZIP；GitHub 自动生成的 **Source code** 是源码，需要自己安装 Python。发布流程在版本标签推送后构建这些下载文件。
+
+桌面包包含 Python 运行环境，使用浏览器显示界面。首次启动后选择“关系分析”，载入下载包中的 `examples/synthetic-chat`，确认身份并生成本地报告。示例不含真实个人数据；也可以打开 `examples/sample-report.html` 查看报告效果。退出时点击界面的电源按钮，关闭浏览器标签不会停止后台服务。
+
+Mac 应用暂未使用 Apple Developer ID 签名或公证。如果 macOS 阻止打开，在确认下载来源后，可通过“系统设置 → 隐私与安全性 → 仍要打开”批准这一个应用。
+
+### 源码启动
+
+建议安装 **Python 3.12**。Windows 文件选择器需要 Tkinter；Mac 使用系统原生文件选择器。
+
+```bash
 git clone https://github.com/schnitzlermandy85-beep/ChatArchiveTool.git
 cd ChatArchiveTool
-py -3.12 app.py --check
-.\start.cmd
 ```
+
+- Windows：双击 `start.cmd`，或运行 `py -3.12 app.py --check` 检查环境。
+- Mac：双击 `start.command`，或在终端运行 `bash start.command`；运行 `python3 app.py --check` 检查环境。
+
+源码启动优先使用项目中的 `.venv`。使用期间保持终端窗口运行。
 
 <details>
 <summary>启动后没有浏览器窗口</summary>
 
-保持启动窗口运行，再打开生成的 `打开界面.html`，或复制控制台中的本机网址到浏览器。启动日志位于 `logs/startup.log`。
+打开数据目录中的 `打开界面.html`，或复制 `logs/current-url.txt` 中的本机网址到浏览器。启动日志为同一目录下的 `logs/startup.log`。
+
+- Mac 桌面版：`~/Library/Application Support/ChatArchiveTool/`。
+- Windows 桌面版：`%LOCALAPPDATA%\ChatArchiveTool\`。
+- 源码版：项目目录。
+
+归档默认保存到该目录的 `exports/`，也可在界面中选择其他位置。
 
 也可以仅启动本机服务，再手工访问网址：
 
@@ -127,16 +147,33 @@ AI 接口支持能按要求返回 JSON 文本的 **Chat Completions 兼容服务
 
 ## 可选导出与语音组件
 
-QQ 直接导出需要用户运行并登录 QQChatExporter，本工具通过其本机 API 调用。微信直接读取需要在界面中“安装 / 修复微信组件”，并依赖本机客户端版本和登录状态；真实微信数据库读取尚未纳入验证。
+QQ 直接导出需要用户运行并登录 QQChatExporter，本工具通过其本机 API 调用。**微信直接读取仅支持 Windows**，需要在界面中“安装 / 修复微信组件”，并依赖本机客户端版本和登录状态；真实微信数据库读取尚未纳入验证。Mac 版请导入已有微信导出文件，直接读取与安装按钮会禁用。QQ 直连仍要求本机已有可用的 QQChatExporter API。
 
-需要新语音转写时，安装可选依赖：
+| 功能 | Windows | Mac |
+| --- | --- | --- |
+| 导入 QQ／微信已有导出、归档、关系分析、HTML 报告 | 支持 | 支持 |
+| QQChatExporter 本机 API | 需要另行配置 QCE | 需要另行配置 QCE |
+| 微信客户端直接读取 | 可选组件，真实数据库尚未验证 | 不支持；可导入已导出文件 |
+| 新语音转写 | 源码版安装可选依赖 | 源码版安装可选依赖 |
+
+桌面下载包不附带语音识别引擎和模型；该功能会禁用，原始音频和已有转写仍保留。
+
+需要新语音转写时，在源码版安装可选依赖（Windows）：
 
 ```powershell
 py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-首次使用未下载的语音模型需要联网，也可在界面中指定已下载的模型目录。已有语音转写可以直接复用。
+Mac 源码版安装方式：
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+bash start.command
+```
+
+语音依赖需提供对应系统和芯片的兼容 wheel；是否可用取决于依赖版本。首次使用未下载的语音模型需要联网，也可在界面中指定已下载的模型目录。已有语音转写可以直接复用。
 
 ## 数据与隐私
 
@@ -146,7 +183,7 @@ API Key 只用于当次调用，不写入配置、报告或日志。聊天正文
 
 ## 开发与验证
 
-最近一次验证：**2026-10-08，115 项回归测试通过**，启动检查及前端脚本交互检查通过。完整测试额外需要 Pillow，用于微信表情缓存关联的合成测试：
+验证记录见 [验证范围](docs/validation.md)，涵盖源码回归、前端交互和实际 Mac 打包启动。完整测试额外需要 Pillow，用于微信表情缓存关联的合成测试：
 
 ```powershell
 py -3.12 -m venv .venv
@@ -156,6 +193,7 @@ py -3.12 -m venv .venv
 
 可选前端检查：`node tests/ui_smoke.cjs`。应用本身不需要 Node。真实云端 API、真实微信数据库读取和浏览器视觉效果尚未纳入验证。
 
+- [打包与 Release 发布](docs/releases.md)
 - [项目结构与扩展入口](docs/architecture.md)
 - [验证范围与记录](docs/validation.md)
 - [心理学分析规则与来源](docs/psychology-requirements.txt)

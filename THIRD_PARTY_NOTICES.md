@@ -7,3 +7,5 @@
 - faster-whisper及微信依赖的Python软件包按各自许可证使用，wheel中的dist-info/许可证随组件保留；依赖来源为PyPI，各文件按PyPI提供的SHA-256验证。
 
 工具目录不附带QQ或微信聊天数据、登录令牌、解密密钥。导出内容只存放在用户指定的本地目录。
+
+桌面分发包另外包含 Python 运行环境、PyInstaller bootloader、packaging、certifi CA 证书及 Pillow。构建时从安装的发行包复制许可至下载包中的 `licenses/`；PyInstaller 的分发例外见其 COPYING.txt，certifi 的证书与代码条款见其 LICENSE。可选语音引擎不包含在桌面包中。

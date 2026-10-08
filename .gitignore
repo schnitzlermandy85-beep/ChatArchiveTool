@@ -59,3 +59,9 @@ security.json
 credentials.json
 config.local.json
 *.local.json
+
+# Native release builds
+build/
+dist/
+*.app/
+.DS_Store

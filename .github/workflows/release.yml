@@ -1,0 +1,73 @@
+name: Desktop release
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            name: Windows-x64
+          - os: macos-14
+            name: macOS-AppleSilicon
+          - os: macos-15-intel
+            name: macOS-Intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build and test dependencies
+        run: python -m pip install -r requirements-build.txt -r requirements-dev.txt
+      - name: Regression tests
+        run: python run_tests.py
+      - name: Frontend behavior
+        run: node tests/ui_smoke.cjs
+      - name: Build and smoke-test desktop package
+        env:
+          BUILD_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'dev' }}
+        run: python scripts/build_release.py --version "$env:BUILD_VERSION"
+        if: runner.os == 'Windows'
+      - name: Build and smoke-test desktop package
+        env:
+          BUILD_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'dev' }}
+        run: python scripts/build_release.py --version "$BUILD_VERSION"
+        if: runner.os != 'Windows'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish Windows and Mac downloads together
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: >-
+          gh release create "$RELEASE_TAG" release-assets/*
+          --verify-tag --title "ChatArchiveTool $RELEASE_TAG"
+          --notes-file docs/release-notes.md

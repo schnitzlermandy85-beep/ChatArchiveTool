@@ -11,10 +11,13 @@ except ImportError:
  from pip._vendor.packaging.requirements import Requirement
  from pip._vendor.packaging.utils import parse_wheel_filename
  from pip._vendor.packaging.version import Version
+from platform_support import data_root,require_wechat_support
 ROOT=pathlib.Path(__file__).resolve().parent
 COMMIT='04ef8cbde3862cff90b5f6b42c9ebfcea44ef48d'
 
-def install(target=ROOT/'.wechat-packages',log=print):
+def install(target=None,log=print):
+ require_wechat_support()
+ target=target if target is not None else data_root(ROOT)/'.wechat-packages'
  target=pathlib.Path(target).resolve();target.mkdir(parents=True,exist_ok=True);tags=set(sys_tags());done={}
  pending=[Requirement(n) for n in ['zstandard','Pillow>=9','psutil>=5.9','imageio-ffmpeg>=0.4.9','uiautomation>=2.0.18','pywin32>=305','pyperclip>=1.8.2','colorama>=0.4.6','cryptography>=41','winsdk>=1.0.0b10']]
  def fetch(url):
@@ -72,5 +75,5 @@ def install(target=ROOT/'.wechat-packages',log=print):
  log('微信组件安装完成')
 
 if __name__=='__main__':
- try:install(pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else ROOT/'.wechat-packages')
+ try:install(pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else data_root(ROOT)/'.wechat-packages')
  except Exception as e:print('安装失败：'+str(e));sys.exit(1)
