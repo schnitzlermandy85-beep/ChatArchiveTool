@@ -33,7 +33,7 @@ class Controller:
   self.analysis_last=None;self.analysis_preview=None
   self.state={'busy':False,'operation':None,'status':'ready','stage':'准备好后，开始创建你的聊天档案。','progress':None,'messageCount':None,'voiceCount':None,'result':False,'summary':None,'connection':'未连接','wechatSupported':wechat_supported(),'wechatReady':wechat_supported() and (runtime_path()/'wechatauto').exists()}
   self.state.update(desktop_exporters.status())
-  if sys.platform=='darwin':self.state['wechatReady']=self.state['wechatInstalled'] and self.state['wechatConfigured']
+  if sys.platform=='darwin':self.state['wechatReady']=self.state['wechatInstalled'] and self.state['wechatConfigured'] and self.state.get('wechatConnection',{}).get('phase') not in ('pending','checking','authorizing','attaching','reading','validating','failed','cancelling')
   self.state.update(analysisArchive='',analysisResult=False,analysisReportUrl='',analysisSummary=None)
   security=pathlib.Path.home()/'.qq-chat-exporter/security.json'
   if security.exists():
@@ -42,7 +42,7 @@ class Controller:
  def snapshot(self):
   with self.lock:
    self.state.update(desktop_exporters.status())
-   if sys.platform=='darwin':self.state['wechatReady']=self.state['wechatInstalled'] and self.state['wechatConfigured']
+   if sys.platform=='darwin':self.state['wechatReady']=self.state['wechatInstalled'] and self.state['wechatConfigured'] and self.state.get('wechatConnection',{}).get('phase') not in ('pending','checking','authorizing','attaching','reading','validating','failed','cancelling')
   with self.lock:return {**self.state,'logs':list(self.logs),'sessions':[{'index':i,'name':str(c.get('remark') or c.get('name') or c.get('peerName') or c['peerUid']),'kind':'群聊' if int(c['chatType'])==2 else '私聊'} for i,c in enumerate(self.sessions)]}
  def log(self,message):
   with self.lock:
@@ -101,7 +101,7 @@ class Controller:
    require_wechat_support()
    if not keyword:raise ValueError('请填写微信好友准确备注、昵称或群名')
    if dbdir and not pathlib.Path(dbdir).is_dir():raise ValueError('微信数据目录不存在')
-   if not self.snapshot()['wechatReady']:raise ValueError('请先安装微信组件；Mac 还需要点击初始化连接并在终端完成登录')
+   if not self.snapshot()['wechatReady']:raise ValueError('请先安装微信组件；Mac 还需要连接已登录微信并完成读取检查')
    identity=[platform,keyword,dbdir,filters]
   else:
    if not src or not pathlib.Path(src).exists():raise ValueError('请选择消息导出文件或目录')
@@ -189,9 +189,12 @@ class Controller:
    install(data_root(ROOT)/'.wechat-packages',log)
    with self.lock:self.state.update(wechatReady=True,status='installed',stage='微信组件已就绪，可以开始导出。',progress=100)
   self.launch('install',job)
- def component_action(self,action):
-  if action not in ('install-qq','start-qq','install-wechat','init-wechat','check-wechat'):raise ValueError('未知组件操作')
+ def component_action(self,action,payload=None):
+  if action not in ('install-qq','start-qq','prepare-qq','install-wechat','init-wechat','check-wechat'):raise ValueError('未知组件操作')
   def job():
+   if action=='prepare-qq':
+    self.prepare_qq(payload or {})
+    return
    if action=='install-qq':
     desktop_exporters.install_component('qce',self.log,self.stop)
     stage='QQ 组件已安装。请先退出桌面 QQ，再点击启动服务，在终端扫码后点击连接 QQ。'
@@ -200,16 +203,45 @@ class Controller:
     stage='已打开 QQ 导出终端；请按提示扫码登录，完成后点击连接 QQ。'
    elif action=='install-wechat':
     desktop_exporters.install_component('wxvault',self.log,self.stop)
-    stage='微信 Mac 组件已安装，请点击初始化微信连接，并在终端完成授权与登录。'
+    stage='微信组件已准备好。保持原微信登录，点击连接已登录微信。'
    elif action=='init-wechat':
-    desktop_exporters.initialize_wechat()
-    stage='微信初始化已在终端打开；完成授权与登录后，返回这里检查连接。'
+    desktop_exporters.initialize_wechat(str((payload or {}).get('dbDir') or ''))
+    stage='已打开授权终端。请查看微信区域的当前步骤；无需退出微信或重新登录。'
    else:
-    desktop_exporters.run_wxvault(['sessions','--limit','1','--json'],self.stop)
+    if desktop_exporters.connection_status().get('active'):raise ValueError('微信连接仍在进行，请先完成或取消本次连接')
+    result=desktop_exporters.run_wxvault(['sessions','--limit','1','--json'],self.stop)
+    if result.get('meta',{}).get('unknown_shards') or result.get('meta',{}).get('status') not in (None,'ok'):raise ValueError('部分聊天尚不能读取，请查看微信连接帮助')
+    desktop_exporters.mark_wechat_verified()
     stage='微信本地读取连接已验证，请填写联系人或群名并开始导出。'
    self.log(stage)
    with self.lock:self.state.update(status='ready',stage=stage,progress=None)
   self.launch('component',job)
+ def prepare_qq(self,payload):
+  address=payload.get('address') or 'http://127.0.0.1:40653'
+  QCE(address)  # Validate before installing or starting anything.
+  parsed=urllib.parse.urlsplit(address)
+  desktop_exporters.check_stop(self.stop)
+  if not desktop_exporters.local_port_open(parsed.hostname,parsed.port or 80):
+   if parsed.port!=40653:raise ValueError('自定义地址没有服务，请检查端口；默认安装请恢复 http://127.0.0.1:40653')
+   desktop_exporters.install_component('qce',self.log,self.stop)
+   desktop_exporters.check_stop(self.stop)
+   desktop_exporters.start_qce()
+  self.log('请在打开的 QQ 导出窗口扫码登录。工具会自动读取会话，无需再点连接；可点击停止。')
+  deadline=time.monotonic()+180
+  while time.monotonic()<deadline:
+   desktop_exporters.check_stop(self.stop)
+   token=payload.get('token') or desktop_exporters.refresh_qce_token() or self.token
+   try:
+    sessions=QCE(address,token,timeout=4).sessions()
+   except (RuntimeError,OSError,ValueError):
+    self.stop.wait(2)
+    continue
+   desktop_exporters.check_stop(self.stop)
+   with self.lock:
+    self.token=token;self.sessions=sessions
+    self.state.update(connection=f'已连接 · {len(sessions)} 个会话',status='connected',stage='已连接 QQ，选择好友或群聊即可导出。')
+   return
+  raise ValueError('等待 QQ 登录超时。请打开导出终端查看二维码；完成扫码后再点击连接。若终端已经退出，请先完全退出普通 QQ，再准备并连接。')
  def cancel(self):
   with self.lock:
    if not self.state['busy']:return
@@ -243,6 +275,7 @@ def make_server(controller=None,port=0):
    elif path in ('/style.css','/app.js'):
     f=ROOT/'web'/path[1:];self.send(200,f.read_bytes(),'text/css; charset=utf-8' if path.endswith('css') else 'text/javascript; charset=utf-8')
    elif path=='/api/state' and self.authenticated():self.send(200,controller.snapshot())
+   elif path=='/api/diagnostics' and self.authenticated():self.send(200,desktop_exporters.diagnostics())
    elif path=='/api/config' and self.authenticated():self.send(200,{'output':str(data_root(ROOT)/'exports'),**desktop_exporters.status(),'wechatSupported':wechat_supported(),'voiceAvailable':voice_available(),'model':model_path(),'address':'http://127.0.0.1:40653','tokenDetected':bool(controller.token),'wechatReady':controller.state['wechatReady']})
    elif path.startswith('/archive/') or path.startswith('/analysis/'):
     cookie=self.headers.get('Cookie','')
@@ -271,7 +304,9 @@ def make_server(controller=None,port=0):
     elif path=='/api/analysis/start':controller.start_analysis(p)
     elif path=='/api/stop':controller.cancel()
     elif path=='/api/install':controller.install()
-    elif path=='/api/component':controller.component_action(p.get('action'))
+    elif path=='/api/component':controller.component_action(p.get('action'),p)
+    elif path=='/api/setup':desktop_exporters.open_setup(p.get('action'))
+    elif path=='/api/wechat-cancel':desktop_exporters.cancel_wechat()
     elif path=='/api/browse':
      kind=p.get('kind');category=p.get('category','messages')
      if kind not in ('folder','file') or category not in ('messages','zip','model','output','db'):raise ValueError('选择器类型不正确')

@@ -182,7 +182,12 @@ def add_media(message, peer, folder, stop):
 
 def export_wechat_mac(keyword, dest, db_dir='', log=print, stop=None, filters=None):
     if db_dir:
-        raise ValueError('Mac 版由初始化组件绑定当前账号，请清空 Windows 数据目录设置；换账号后重新初始化')
+        try:
+            configured = json.loads((Path.home() / '.wxvault/config.json').read_text())['db_dir']
+        except (OSError, ValueError, KeyError):
+            configured = ''
+        if not configured or Path(db_dir).expanduser().resolve() != Path(configured).expanduser().resolve():
+            raise ValueError('所选微信目录与已连接账号不同，请先连接当前账号，或清空数据目录设置')
     # Refresh contacts and validate the configured account without dumping messages to logs.
     log('正在连接 Mac 微信本地读取组件…')
     run_wxvault(['sessions', '--limit', '1', '--json'], stop)

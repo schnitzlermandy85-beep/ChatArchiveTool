@@ -2,6 +2,8 @@
 from __future__ import annotations
 import hashlib
 import json
+import socket
+import uuid
 import os
 from pathlib import Path
 import platform
@@ -16,7 +18,7 @@ import time
 import urllib.request
 import zipfile
 
-from core import ROOT, Cancelled
+from core import ROOT, Cancelled, child_command, write_json
 from platform_support import data_root
 
 QCE_VERSION = 'v6.3.2'
@@ -63,7 +65,8 @@ def status():
             'qceInstalled': qce_launcher() is not None,
             'wechatMac': sys.platform == 'darwin', 'wechatMacSupported': mac_arm(),
             'wechatInstalled': wxvault_binary().is_file() if mac_arm() else False,
-            'wechatConfigured': wxvault_configured() if mac_arm() else False}
+            'wechatConfigured': wxvault_configured() if mac_arm() else False,
+            'wechatConnection': connection_status() if mac_arm() else {}}
 
 
 def check_stop(stop):
@@ -145,7 +148,7 @@ def install_component(component, log=print, stop=None):
         key = 'wxvault'
         destination = wxvault_binary().parent
         if wxvault_binary().is_file():
-            log('微信 Mac 导出组件已安装；点击“初始化微信连接”')
+            log('微信 Mac 导出组件已安装；点击“连接已登录微信”')
             return
     else:
         raise ValueError('该系统暂不支持这个导出组件')
@@ -188,6 +191,9 @@ def start_qce():
     if launcher is None:
         raise ValueError('请先安装 QQ 导出组件')
     if mac_arm():
+        running = subprocess.run(['/usr/bin/pgrep', '-x', 'QQ'], capture_output=True, timeout=5)
+        if running.returncode == 0:
+            raise ValueError('QQ 组件已准备好。请先在 QQ 菜单中选择退出 QQ（或按 ⌘Q），再点击准备并连接。关闭窗口不等于退出；本工具不会替你退出 QQ。')
         # The upstream launcher checks for running desktop QQ; never kill it here.
         open_terminal_script('QQ-export', 'cd -- ' + shlex.quote(str(launcher.parent)) + '\n' +
             'echo "请先完全退出桌面 QQ，再在此窗口按提示扫码登录。使用期间保持此窗口运行。"\n' +
@@ -198,16 +204,147 @@ def start_qce():
         raise ValueError('该平台没有可启动的 QQ 导出组件')
 
 
-def initialize_wechat():
+CONNECTION_MESSAGES = {
+    'terminal_closed': ('连接窗口已结束', '尚未完成连接，可以重新连接；无需退出微信。', 'terminal'),
+    'already_running': ('已有微信读取窗口正在运行', '请先完成或关闭前一个连接终端，再重试。', 'terminal'),
+    'cancelling': ('正在取消微信连接', '如终端正在等待密码，请在该终端按 Control+C。读取过程中会先解除连接，再结束。', 'terminal'),
+    'checking': ('检查连接条件', '正在检查微信是否登录及本机记录是否可读。', 'wechat'),
+    'password': ('请在终端完成一次授权', '输入 Mac 登录密码后按回车；不会显示字符。密码不会进入本工具。', 'terminal'),
+    'attaching': ('正在连接当前微信', '保持微信登录。如果系统询问开发者工具权限，请允许终端。', 'wechat'),
+    'open_chat': ('请打开要导出的聊天', '在微信里打开目标聊天，并往上翻几页历史消息；约一分钟后自动检查结果。', 'wechat'),
+    'validating': ('正在验证读取结果', '验证在本机完成，请稍候。', 'wechat'),
+    'complete': ('微信连接检查通过', '现在可以填写好友备注、昵称或 wxid 并导出。', 'wechat'),
+    'disk_permission': ('终端还没有文件读取权限', '打开完全磁盘访问设置，允许终端，然后完全退出终端再重试。', 'permissions'),
+    'developer_permission': ('macOS 拒绝读取微信进程', '在开发者工具设置中允许终端，退出并重新打开终端后重试。当前微信版本仍可能不兼容；本工具不会自动退出或重签微信。', 'permissions'),
+    'tools_missing': ('缺少 Apple 命令行工具', '点击安装系统工具，在系统弹窗中完成安装后重试。无需安装完整 Xcode。', 'permissions'),
+    'wechat_not_running': ('请先登录电脑微信', '打开原来的微信并登录，再回来连接。', 'wechat'),
+    'multiple_processes': ('发现多个微信进程', '请先手动关闭多余的微信副本，仅保留日常使用的微信。', 'wechat'),
+    'component_missing': ('微信组件尚未安装完整', '请先点击准备微信组件。', 'wechat'),
+    'no_data': ('尚未找到本机聊天记录', '请登录电脑微信，打开要导出的聊天并等待同步。手机上的记录需要先迁移到电脑。', 'wechat'),
+    'multiple_accounts': ('电脑上有多个微信数据目录', '在连接与来源设置中选择当前账号的 db_storage 文件夹，再连接。', 'wechat'),
+    'invalid_account': ('微信数据目录不匹配', '请选择当前用户微信数据目录中的 db_storage 文件夹，或清空该设置后重试。', 'wechat'),
+    'no_keys': ('未取得可验证的读取权限', '当前客户端可能不支持此读取方法，或目标记录尚未加载。可在微信中打开目标聊天后重试；仍失败请使用导入。不要反复输入密码或退出微信。', 'wechat'),
+    'partial_keys': ('部分聊天尚不能读取', '保持登录，打开目标聊天并向上翻阅后重新连接；暂不能读取的记录不会被当作完整导出。', 'wechat'),
+    'authorization_cancelled': ('系统授权未完成', '可以稍后重试。Mac 登录密码不是微信密码；不要把密码填入 API Key。', 'terminal'),
+    'cancelled': ('已取消连接准备', '原微信没有被本工具主动退出。', 'wechat'),
+    'timeout': ('连接准备超时', '请关闭本次连接终端，确认系统授权弹窗已处理后重试。', 'wechat'),
+    'reader_failed': ('当前微信读取未成功', '请先检查终端的开发者工具权限；如果仍失败，请使用导入模式。', 'wechat'),
+    'unexpected_error': ('连接准备未完成', '请检查权限与系统工具。此流程不会自动退出微信；可使用导入模式。', 'wechat'),
+    'save_failed': ('无法保存本机连接配置', '请检查当前用户的数据目录访问权限和磁盘空间。', 'permissions'),
+    'too_many_databases': ('本机账号数据过多', '请选择当前账号的数据目录再试。', 'wechat'),
+    'terminal_pending': ('请在终端窗口继续', '终端已请求打开；如果没有看到窗口，点击显示终端。', 'terminal'),
+}
+
+
+def connection_status():
+    root = tools_root() / 'connections/wechat'
+    try:
+        pointer = json.loads((root / 'current.json').read_text(encoding='utf-8'))
+        identifier = pointer['id']
+        if not isinstance(identifier, str) or len(identifier) != 32 or any(c not in '0123456789abcdef' for c in identifier):
+            return {}
+        data = json.loads((root / identifier / 'status.json').read_text(encoding='utf-8'))
+        phase, code = data['phase'], data['code']
+        if code not in CONNECTION_MESSAGES or phase not in ('pending','checking','authorizing','attaching','reading','validating','complete','failed','cancelling'):
+            return {}
+        active = phase not in ('complete', 'failed')
+        if active and isinstance(data.get('pid'), int) and data['pid'] > 0:
+            try:
+                os.kill(data['pid'], 0)  # Liveness only; never signals WeChat.
+            except ProcessLookupError:
+                phase, code, active = 'failed', 'terminal_closed', False
+            except PermissionError:
+                pass
+        if active and phase != 'authorizing' and time.time() - float(data.get('at', 0)) > 180:
+            (root / identifier / 'cancel').touch()
+            phase, code, active = 'failed', 'timeout', False
+        title, detail, topic = CONNECTION_MESSAGES[code]
+        return {'phase': phase, 'code': code, 'title': title, 'detail': detail, 'topic': topic, 'active': active}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def initialize_wechat(db_dir=''):
     if not mac_arm() or not wxvault_binary().is_file():
-        raise ValueError('请先安装 Apple 芯片 Mac 微信导出组件')
-    if not shutil.which('lldb'):
-        raise ValueError('初始化需要 Xcode 命令行工具，请先在终端运行 xcode-select --install')
-    open_terminal_script('WeChat-connect',
-        'cd -- ' + shlex.quote(str(wxvault_binary().parent)) + '\n' +
-        'echo "初始化会暂时退出微信，使用临时副本读取本地数据库密钥，并恢复原微信。"\n' +
-        'echo "请给终端完全磁盘访问权限；管理员密码仅在系统终端输入，并在微信窗口完成登录。"\n' +
-        shlex.quote(str(wxvault_binary())) + ' init')
+        raise ValueError('请先点击“准备微信组件”')
+    if connection_status().get('active'):
+        raise ValueError('微信连接准备正在进行，请先查看界面中的当前步骤')
+    root = tools_root() / 'connections/wechat'
+    identifier = uuid.uuid4().hex
+    job = root / identifier
+    job.mkdir(parents=True, mode=0o700)
+    write_json(job / 'request.json', {'executable': str(wxvault_binary()),
+        'hook': str(ROOT / 'vendor/wechat_live/hook.py'), 'dbDir': db_dir})
+    write_json(job / 'status.json', {'phase': 'pending', 'code': 'terminal_pending', 'at': time.time()})
+    write_json(root / 'current.json', {'id': identifier})
+    command = shlex.join(child_command('wechat_connect', job / 'request.json'))
+    try:
+        open_terminal_script('WeChat-connect', command)
+    except Exception:
+        write_json(job / 'status.json', {'phase': 'failed', 'code': 'unexpected_error', 'at': time.time()})
+        raise
+
+
+def mark_wechat_verified():
+    root = tools_root() / 'connections/wechat'
+    if not connection_status():
+        return
+    pointer = json.loads((root / 'current.json').read_text())
+    write_json(root / pointer['id'] / 'status.json', {'phase': 'complete', 'code': 'complete', 'at': time.time()})
+
+
+def cancel_wechat():
+    root = tools_root() / 'connections/wechat'
+    if not connection_status().get('active'):
+        return
+    pointer = json.loads((root / 'current.json').read_text())
+    job = root / pointer['id']
+    (job / 'cancel').touch()
+    previous = json.loads((job / 'status.json').read_text())
+    write_json(job / 'status.json', {**previous, 'phase': 'cancelling', 'code': 'cancelling', 'at': time.time()})
+
+
+def local_port_open(address='127.0.0.1', port=40653):
+    try:
+        with socket.create_connection((address, port), timeout=.3):
+            return True
+    except OSError:
+        return False
+
+
+def diagnostics():
+    info = status()
+    qq_open = local_port_open()
+    qq = {'code': 'ready' if qq_open else 'not_started' if info['qceInstalled'] else 'not_installed',
+          'title': 'QQ 导出服务已启动' if qq_open else 'QQ 组件已安装，服务还没有启动' if info['qceInstalled'] else '尚未安装 QQ 导出组件',
+          'detail': '点击连接 QQ 读取会话；如果提示未登录，请完成扫码。' if qq_open else '点击“准备并连接 QQ”，按界面提示完成安装和启动。普通 QQ 登录不会自动开启导出服务。',
+          'topic': 'qq'}
+    wx = connection_status()
+    if not wx:
+        wx = {'code': 'configured' if info['wechatConfigured'] else 'not_configured',
+              'title': '微信已有本机配置，可先检查连接' if info['wechatConfigured'] else '微信尚未完成本机读取授权',
+              'detail': '点击检查连接，验证当前账号是否可读。' if info['wechatConfigured'] else '准备组件后，连接已登录的微信。系统可能要求一次授权；不再使用退出微信的副本初始化。',
+              'topic': 'wechat', 'active': False}
+    return {'qq': qq, 'wechat': wx}
+
+
+def open_setup(action):
+    if sys.platform != 'darwin':
+        raise ValueError('这个设置入口仅用于 Mac')
+    targets = {'full-disk-access': 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+               'developer-tools': 'x-apple.systempreferences:com.apple.preference.security?Privacy_DevTools'}
+    if action in targets:
+        subprocess.run(['/usr/bin/open', targets[action]], check=True)
+    elif action == 'install-tools':
+        result = subprocess.run(['/usr/bin/xcode-select', '--install'], capture_output=True)
+        if result.returncode:
+            raise ValueError('系统工具可能已安装。如果仍提示缺失，请打开系统设置中的软件更新进行检查。')
+    elif action == 'show-terminal':
+        subprocess.run(['/usr/bin/open', '-a', 'Terminal'], check=True)
+    elif action == 'open-wechat':
+        subprocess.run(['/usr/bin/open', '-b', 'com.tencent.xinWeChat'], check=True)
+    else:
+        raise ValueError('未知设置操作')
 
 
 def run_wxvault(args, stop=None, timeout=300):
@@ -223,13 +360,13 @@ def run_wxvault(args, stop=None, timeout=300):
             while process.poll() is None:
                 check_stop(stop)
                 if time.monotonic() > deadline:
-                    raise ValueError('微信读取超时，请检查初始化状态和终端完全磁盘访问权限')
+                    raise ValueError('微信读取超时，请检查连接状态和终端完全磁盘访问权限')
                 if max(os.fstat(stdout.fileno()).st_size, os.fstat(stderr.fileno()).st_size) > MAX_DOWNLOAD:
                     raise ValueError('微信导出数据过大，请缩小日期范围')
                 time.sleep(.1)
             check_stop(stop)
             if process.returncode:
-                raise ValueError('微信组件读取失败：请先在终端完成初始化，并检查当前账号及文件访问权限；可重新初始化连接')
+                raise ValueError('微信组件读取失败：请查看微信连接步骤，检查当前账号及文件访问权限；不要反复输入密码')
             if os.fstat(stdout.fileno()).st_size > MAX_DOWNLOAD:
                 raise ValueError('微信导出数据过大，请缩小日期范围')
             stdout.seek(0)

@@ -35,7 +35,7 @@ python scripts/build_release.py --version v1.1.0
 
 ## 可选组件与签名
 
-桌面包包含核心分析和 HTTPS CA 证书。新语音识别引擎／模型不打包，界面禁用未安装的转写选项；需要新转写请用源码版安装 `requirements.txt`。Windows 微信组件保持按需安装，Apple 芯片 Mac 按需安装 wxvault；QQ 可安装并启动 QCE。Intel Mac 微信仍使用导入模式。组件安装目录 `components/`、真实账号配置、密钥及缓存不打包。微信 Mac 当前支持文字与可提取图片，其他媒体保留缺失占位；真实账号端到端验证需使用者完成初始化与登录。
+桌面包包含核心分析和 HTTPS CA 证书。新语音识别引擎／模型不打包，界面禁用未安装的转写选项；需要新转写请用源码版安装 `requirements.txt`。Windows 微信组件保持按需安装，Apple 芯片 Mac 按需安装 wxvault；QQ 可安装并启动 QCE。Intel Mac 微信仍使用导入模式。组件安装目录 `components/`、真实账号配置、密钥及缓存不打包。微信 Mac 当前支持文字与可提取图片，其他媒体保留缺失占位；真实账号端到端验证需使用者在保持微信登录时完成读取授权。
 
 当前 Mac 构建只有 PyInstaller 的本地 ad-hoc 签名，尚未使用 Apple Developer ID 正式签名或完成 Apple 公证；Windows exe 也没有发布者代码签名。`codesign --verify` 通过只说明签名和包完整性校验通过，不代表 Apple 已审核或公证，也不保证下载后不会被 Gatekeeper 拦截。
 

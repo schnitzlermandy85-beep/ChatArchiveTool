@@ -15,3 +15,5 @@
 - QQ 按需安装 shuakami/qq-chat-exporter 的 v6.3.2 官方发行包；不随本应用捆绑。Mac 安装与启动遵循其 [官方指南](https://shuakami.github.io/qq-chat-exporter/docs/macos-deploy.html)。组件保留上游归档中的通知与许可。
 - 微信按需安装 [with-yang/wxvault](https://github.com/with-yang/wxvault) v0.1.0，参考提交 `aacf0de666d06e23718338fc2f81a1f71873a997` 的 CLI、缓存路径和数据库结构。上游适用 Apache-2.0，原 LICENSE 和 NOTICE 保留于 `vendor/licenses/wxvault/` 并复制到安装目录。`mac_wechat.py` 是本项目适配，未修改上游二进制。
 - zstandard 用于解压微信消息正文，随桌面包保留其许可证。固定发行包下载地址与 SHA-256 见 `desktop_exporters.py`。
+
+- `vendor/wechat_live/hook.py` 基于 wxvault v0.1.0 的 `assets/hook.py`（Apache-2.0；许可与版权通知见 `vendor/licenses/wxvault/`），改为连接已运行进程，增加有界内存扫描、AES 调用读取、取消和 finally 解除连接。不再调用上游会退出微信的 `init`。连接思路同时参考 [jackwener/wx-cli-again](https://github.com/jackwener/wx-cli-again) 的 macOS 实现；不包含其 Rust 二进制。

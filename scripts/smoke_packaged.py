@@ -22,6 +22,13 @@ def main():
         # Unknown helpers must exit, never launch a second server.
         invalid = subprocess.run([executable, '--helper', 'invalid'], env=env, timeout=30)
         assert invalid.returncode == 2
+        if sys.platform == 'darwin' and platform.machine().lower() == 'arm64':
+            job = root / 'cancelled-connection'; job.mkdir()
+            (job / 'cancel').touch()
+            (job / 'request.json').write_text('{}')
+            cancelled = subprocess.run([executable, '--helper', 'wechat_connect', str(job / 'request.json')], env=env, timeout=15)
+            assert cancelled.returncode == 1
+            assert json.loads((job / 'status.json').read_text())['code'] == 'cancelled'
         source = root / '示例 聊天'
         shutil.copytree(Path(__file__).resolve().parents[1] / 'examples/synthetic-chat', source)
         process = subprocess.Popen([executable, '--no-browser'], env=env)
@@ -51,6 +58,8 @@ def main():
                 assert config['wechatMac'] is True
                 assert config['wechatInstalled'] is False
                 assert config['qceInstalled'] is False
+            assert 'id="help-view"' in page and 'id="help-search"' in page
+            assert '会暂时退出微信' not in page
             assert 'data-component="install-qq"' in page
             assert 'data-component="init-wechat"' in page
             inspection = api('analysis/inspect', {'archive': str(source)})

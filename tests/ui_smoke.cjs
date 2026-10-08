@@ -30,6 +30,11 @@ const context=vm.createContext({document,fetch,Option:function(t,v){return Objec
 vm.runInContext(fs.readFileSync(base+'web/app.js','utf8'),context);
 const run=source=>vm.runInContext(source,context);
 (async()=>{await new Promise(r=>setImmediate(r));
+ run("showView('help')");assert(!elements['help-view'].hidden);assert(elements['export-view'].hidden);assert(elements['analysis-view'].hidden);
+ run("openHelp('api')");assert.strictEqual(run('activeView'),'help');assert(html.includes('导出和本地分析不需要 API'));
+ run("renderWechatStep({active:true,code:'password',title:'等待授权',detail:'输入 Mac 密码'})");assert(!elements['cancel-wechat'].hidden);assert.strictEqual(elements['wechat-next-actions'].children.length,1);
+ run("state={wechatInstalled:true,wechatConnection:{active:true}};refreshReadiness()");assert(elements['init-wechat'].disabled);
+ await run('connectQQ()');assert.strictEqual(calls.at(-2).body.action,'prepare-qq');
  run("showView('analysis')");assert(elements['export-view'].hidden);assert(!elements['analysis-view'].hidden);
  elements['analysis-archive'].value='/fake';assert(await run('inspectAnalysisArchive()'));assert(elements['analysis-self'].children.length===3);assert(!run('analysisReady()'));assert(elements['analysis-loaded-detail'].textContent.includes('QQ 分块 JSONL'));
  elements['analysis-self'].value='a';run('invalidateAnalysisPreview()');assert(run('analysisReady()'));
@@ -55,5 +60,5 @@ const run=source=>vm.runInContext(source,context);
  run("wechatSupported=false;voiceAvailable=false;platform='WeChat';mode='direct';updatePlatform()");assert.strictEqual(run('mode'),'import');assert(elements['import-hint'].textContent.includes('Mac'));assert(elements['install'].disabled);assert(elements['transcribe'].disabled);
  run("state={...state,wechatSupported:true,wechatMac:true,wechatInstalled:true,wechatReady:true,qceInstalled:true,qceInstallSupported:true};renderComponents(state);platform='WeChat';mode='direct';updatePlatform()");assert.strictEqual(run('mode'),'direct');assert(!elements['wechat-mac-setup'].hidden);assert(!elements['init-wechat'].disabled);assert(!elements['start-qq'].disabled);
  run("wechatSupported=true;voiceAvailable=true;refreshReadiness()");assert(!elements['install'].disabled);assert(!elements['transcribe'].disabled);
- console.log('PASS: real app.js DOM smoke — navigation, QCE import identity, four templates, local generation, no sample limit, 10 accepted generic/DeepSeek endpoint forms, 6 rejected endpoint forms, preset preserves model/key, two exact batch requests plus synthesis preview, full-text coverage, editable prompt reconsent, short overlapping key/model remain separate, blank-key validation, secret clearing, cancellation state, bad archive. Browser layout remains unverified.');
+ console.log('PASS: real app.js DOM smoke — navigation, QCE import identity, four templates, local generation, no sample limit, 10 accepted generic/DeepSeek endpoint forms, 6 rejected endpoint forms, preset preserves model/key, two exact batch requests plus synthesis preview, full-text coverage, editable prompt reconsent, short overlapping key/model remain separate, blank-key validation, secret clearing, cancellation state, bad archive. Help navigation, connection status, duplicate connection guard and guided QQ route also passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

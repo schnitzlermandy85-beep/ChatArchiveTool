@@ -14,7 +14,7 @@ def child_python():
 
 def child_command(helper, *args):
  import sys
- if helper not in ('filepicker', 'wechat_worker'):raise ValueError('Unknown helper')
+ if helper not in ('filepicker', 'wechat_worker', 'wechat_connect'):raise ValueError('Unknown helper')
  if getattr(sys, 'frozen', False):return [sys.executable, '--helper', helper, *map(str,args)]
  return [child_python(), str(ROOT/(helper+'.py')), *map(str,args)]
 
@@ -45,15 +45,15 @@ def emojis(s):
  return out
 
 class QCE:
- def __init__(self,base='http://127.0.0.1:40653',token=''):
+ def __init__(self,base='http://127.0.0.1:40653',token='',timeout=60):
   u=urllib.parse.urlsplit(base)
   if u.scheme!='http' or u.hostname not in ('localhost','127.0.0.1','::1') or u.username or u.password:raise ValueError('QCE地址必须是本机HTTP地址')
-  self.base=base.rstrip('/');self.token=token;self.op=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+  self.timeout=timeout;self.base=base.rstrip('/');self.token=token;self.op=urllib.request.build_opener(urllib.request.ProxyHandler({}))
  def request(self,path,body=None):
   if not path.startswith('/') or path.startswith('//'):raise ValueError('非法API路径')
   req=urllib.request.Request(self.base+path,data=json.dumps(body).encode() if body is not None else None,headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/json'})
   try:
-   with self.op.open(req,timeout=60) as r:result=json.load(r)
+   with self.op.open(req,timeout=self.timeout) as r:result=json.load(r)
   except urllib.error.HTTPError as e:raise RuntimeError(f'QCE HTTP {e.code}：检查导出终端中的登录状态和访问令牌，再重新连接') from None
   except urllib.error.URLError:raise RuntimeError('无法连接 QQ 导出服务：请先安装并启动 QQ 导出组件，在终端扫码登录；仅打开普通 QQ 无法连接。若已启动，请核对 QCE 地址与端口。') from None
   if not result.get('success',True):raise RuntimeError(str(result.get('error') or result.get('message') or 'QCE请求失败'))
