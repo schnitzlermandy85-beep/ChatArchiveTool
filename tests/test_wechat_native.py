@@ -32,7 +32,7 @@ class NativeWeChatTests(unittest.TestCase):
             self.archive(source, extras={'聊天记录内的图片、视频和文件/同名.png': b'PNG-fixture', 'media/clip.mp4': b'VIDEO-fixture'})
             before = source.read_bytes()
             result = bundle_wechat(source, root / 'out', transcribe=False, log=lambda _: None)
-            rows = [json.loads(line) for line in (root / 'out/messages.jsonl').read_text().splitlines()]
+            rows = [json.loads(line) for line in (root / 'out/messages.jsonl').read_text(encoding='utf-8').splitlines()]
             self.assertEqual(result['messageCount'], 4)
             self.assertEqual(len({r['id'] for r in rows}), 4)
             self.assertEqual(result['historyCompleteness'], 'selected_messages_only')
@@ -44,7 +44,7 @@ class NativeWeChatTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), before)
             first_ids = [r['id'] for r in rows]
             bundle_wechat(source, root / 'out', transcribe=False, log=lambda _: None)
-            self.assertEqual(first_ids, [json.loads(line)['id'] for line in (root / 'out/messages.jsonl').read_text().splitlines()])
+            self.assertEqual(first_ids, [json.loads(line)['id'] for line in (root / 'out/messages.jsonl').read_text(encoding='utf-8').splitlines()])
 
     def test_ambiguous_media_is_not_assigned_to_the_wrong_message(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -54,13 +54,19 @@ class NativeWeChatTests(unittest.TestCase):
             self.assertEqual(result['media']['missing_image'], 1)
 
     def test_rejects_traversal_symlink_case_collision_and_duplicate_files(self):
-        cases = [['../escape'], ['a/F.png', 'A/f.png'], ['p', 'p/file'], ['/absolute'], ['C:/file'], ['a\\b']]
+        cases = [['../escape'], ['a/F.png', 'A/f.png'], ['p', 'p/file'], ['/absolute'], ['C:/file']]
         for names in cases:
             with self.subTest(names=names), io.BytesIO() as buffer:
                 with zipfile.ZipFile(buffer, 'w') as z:
                     for name in names: z.writestr(name, b'x')
                 buffer.seek(0)
                 with zipfile.ZipFile(buffer) as z, self.assertRaises(ValueError): validated_entries(z)
+        # Windows' ZIP writer normalizes backslashes. Put the malicious raw
+        # filename into both headers after writing so every OS sees the same ZIP.
+        with io.BytesIO() as buffer:
+            with zipfile.ZipFile(buffer, 'w') as z: z.writestr('a/b', b'x')
+            raw = buffer.getvalue().replace(b'a/b', b'a\\b')
+            with zipfile.ZipFile(io.BytesIO(raw)) as z, self.assertRaises(ValueError): validated_entries(z)
         with io.BytesIO() as buffer:
             with zipfile.ZipFile(buffer, 'w') as z:
                 link = zipfile.ZipInfo('symlink'); link.external_attr = (stat.S_IFLNK | 0o777) << 16
@@ -78,7 +84,7 @@ class NativeWeChatTests(unittest.TestCase):
                     z.writestr(f'batches/{i:04d}/media/同名.png', bytes([i]))
             result = bundle_wechat(source, root / 'out', log=lambda _: None)
             self.assertEqual(result['messageCount'], 8)
-            rows = [json.loads(line) for line in (root / 'out/messages.jsonl').read_text().splitlines()]
+            rows = [json.loads(line) for line in (root / 'out/messages.jsonl').read_text(encoding='utf-8').splitlines()]
             self.assertEqual(len({r['id'] for r in rows}), 8)
             images = [p['path'] for r in rows for p in r['parts'] if p['type'] == 'image']
             self.assertEqual(len(set(images)), 2)
