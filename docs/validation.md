@@ -4,14 +4,16 @@
 
 本次连接修复参考 QQChatExporter v6.3.2 与 wxvault v0.1.0 官方源代码／发行包。
 
-- Python 回归：138 项，137 通过、1 项 Windows 专属测试跳过。
+- Python 回归：139 项，138 通过、1 项 Windows 专属测试跳过。
 - 新增合成微信数据库检查：两个分片共 602 条消息全量归档、同名联系人消歧、原生发送者 ID、日期范围、zstd 正文、图片提取接口、语音缺失占位、取消与异常分片拒绝。
 - 组件检查：路径逃逸／符号链接拒绝、SHA-256 不匹配拒绝、Intel 平台限制、首次启动后重新读取 QQ 令牌、未启动服务的错误提示、操作白名单与忙碌限制。
 - `node tests/ui_smoke.cjs`：通过，包含 Apple 芯片微信直读入口与 Intel 导入回退。
-- 实际下载 wxvault arm64 v0.1.0，SHA-256 与固定值一致；二进制 `--help`、`--debug-source history --help`、`extract --help` 运行通过。没有执行真实账号初始化、读取真实聊天或修改已安装 QQ／微信。
+- 实际下载 wxvault arm64 v0.1.0，SHA-256 与固定值一致；二进制 `--help`、`--debug-source history --help`、`extract --help` 运行通过。没有执行真实账号初始化、读取真实聊天或修改已安装 QQ／微信。云端 `verify_export_components.py` 已实际下载、校验并解包官方 QCE Mac 包，验证启动器布局及 wxvault 安装执行权限。
 - `python scripts/build_release.py --version dev-mac-connect`：生成新的 Apple Silicon `.app` 和 ZIP，打包程序的启动、平台能力、组件按钮、合成档案分析、报告与退出检查通过。
 
-以上验证不能证明任意客户端版本的真实直读可用。QQ 需用户退出桌面 QQ 并扫码登录导出服务；微信需用户给终端授权、完成临时客户端登录，再用目标会话验收。微信媒体能力限于上游可提取图片，其余媒体原件保留缺失占位。Windows／Intel 新安装包尚未在本机运行。
+以上验证不能证明任意客户端版本的真实直读可用。QQ 需用户退出桌面 QQ 并扫码登录导出服务；微信需用户给终端授权、完成临时客户端登录，再用目标会话验收。微信媒体能力限于上游可提取图片，其余媒体原件保留缺失占位。Windows x64 与 Apple Silicon 云端构建及打包后检查已通过；Intel Mac 发布检查继续由 CI 执行。本机没有运行 Windows／Intel 安装包。
+
+本地 HTTP 服务启动不再进行反向 DNS 查询；新增检查确保离线或 DNS 异常不会阻塞绑定环回地址。另修复 Windows 默认字符编码影响检查日志、数据目录不必要求取主目录，以及源码启动器非交互环境错误后等待输入的问题。
 
 ## 初次 macOS 与分发包验证（2026-10-08）
 

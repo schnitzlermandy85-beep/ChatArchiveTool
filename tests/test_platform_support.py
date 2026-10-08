@@ -89,9 +89,12 @@ class PlatformSupportTests(unittest.TestCase):
     @unittest.skipUnless(sys.platform == 'darwin', 'macOS source launcher')
     def test_actual_command_launcher(self):
         with tempfile.TemporaryDirectory() as temp:
-            result = subprocess.run(['bash', str(core.ROOT / 'start.command'), '--check'],
-                env={**os.environ, 'CHATARCHIVE_DATA_DIR': temp, 'CHATARCHIVE_PYTHON': sys.executable},
-                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+            try:
+                result = subprocess.run(['bash', str(core.ROOT / 'start.command'), '--check'],
+                    env={**os.environ, 'CHATARCHIVE_DATA_DIR': temp, 'CHATARCHIVE_PYTHON': sys.executable},
+                    stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+            except subprocess.TimeoutExpired as error:
+                self.fail(f'Source launcher timed out; stdout={error.stdout!r}; stderr={error.stderr!r}')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('Startup check passed', result.stdout)
             failed = subprocess.run(['bash', str(core.ROOT / 'start.command'), '--check'],

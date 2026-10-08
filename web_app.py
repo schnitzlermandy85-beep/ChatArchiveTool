@@ -2,6 +2,7 @@
 from __future__ import annotations
 import datetime,hashlib,json,mimetypes,os,pathlib,re,secrets,subprocess,sys,threading,time,urllib.parse,webbrowser
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+from socketserver import TCPServer
 from core import ROOT,QCE,bundle,Cancelled,safe_child,child_command
 from wechat_adapter import export_wechat,bundle_wechat,runtime_path
 from relationship import inspect_archive,prepare_analysis,analyze_prepared
@@ -215,6 +216,14 @@ class Controller:
    if self.state['operation']=='connect':raise ValueError('会话读取中，请稍候')
    self.stop.set();self.state.update(status='stopping',stage='正在结束当前阶段，请稍候。已完成的档案会保留。')
 
+class LocalHTTPServer(ThreadingHTTPServer):
+ def server_bind(self):
+  # HTTPServer otherwise performs reverse DNS on 127.0.0.1 during startup.
+  # This local-only application never needs a network-resolved hostname.
+  TCPServer.server_bind(self)
+  self.server_name='localhost'
+  self.server_port=self.socket.getsockname()[1]
+
 def make_server(controller=None,port=0):
  controller=controller or Controller();auth=secrets.token_urlsafe(32)
  class Handler(BaseHTTPRequestHandler):
@@ -281,7 +290,7 @@ def make_server(controller=None,port=0):
     else:self.send(404,{'error':'未找到请求'});return
     self.send(200,{'ok':True})
    except (ValueError,KeyError,TypeError,OSError,subprocess.SubprocessError) as e:self.send(400,{'error':str(e)})
- server=ThreadingHTTPServer(('127.0.0.1',port),Handler);server.daemon_threads=True;server.controller=controller;server.auth=auth;return server
+ server=LocalHTTPServer(('127.0.0.1',port),Handler);server.daemon_threads=True;server.controller=controller;server.auth=auth;return server
 
 def browser_candidates():
  # Prefer a known installed browser instead of relying solely on URL association.

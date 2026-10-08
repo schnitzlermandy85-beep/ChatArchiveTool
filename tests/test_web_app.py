@@ -5,6 +5,14 @@ from web_app import Controller,make_server,date_filter
 from test_core import test_directory
 
 class WebTests(unittest.TestCase):
+ def test_local_server_starts_without_reverse_dns(self):
+  with patch('socket.getfqdn',side_effect=AssertionError('No DNS during startup')):
+   server=make_server()
+   try:
+    self.assertEqual(server.server_address[0],'127.0.0.1')
+    self.assertEqual(server.server_name,'localhost')
+    self.assertGreater(server.server_port,0)
+   finally:server.server_close()
  def test_date_timezone_and_validation(self):
   result=date_filter('2026-10-01','2026-10-01')
   self.assertEqual(result['endTime']-result['startTime'],86399)
