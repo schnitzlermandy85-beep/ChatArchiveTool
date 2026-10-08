@@ -1,0 +1,2 @@
+# Image fixture verification only; no voice/model dependencies.
+Pillow==12.3.0

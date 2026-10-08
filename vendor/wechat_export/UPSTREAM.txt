@@ -1,0 +1,3 @@
+https://github.com/zhuzhangxue/wechat-chat-export
+commit: 5b56e51cd9368bc7e4c563761057b561501809d9
+Unmodified vendored files; adaptation is in wechat_worker.py.
