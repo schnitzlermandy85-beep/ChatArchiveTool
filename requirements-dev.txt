@@ -1,2 +1,4 @@
 # Image fixture verification only; no voice/model dependencies.
 Pillow==12.3.0
+# Mac WeChat compressed-message fixtures
+zstandard>=0.23,<1

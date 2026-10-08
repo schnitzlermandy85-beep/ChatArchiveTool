@@ -1,11 +1,24 @@
 # 验证记录
 
-## macOS 与分发包验证（2026-10-08）
+## Mac 直读适配验证（2026-10-08）
+
+本次连接修复参考 QQChatExporter v6.3.2 与 wxvault v0.1.0 官方源代码／发行包。
+
+- Python 回归：138 项，137 通过、1 项 Windows 专属测试跳过。
+- 新增合成微信数据库检查：两个分片共 602 条消息全量归档、同名联系人消歧、原生发送者 ID、日期范围、zstd 正文、图片提取接口、语音缺失占位、取消与异常分片拒绝。
+- 组件检查：路径逃逸／符号链接拒绝、SHA-256 不匹配拒绝、Intel 平台限制、首次启动后重新读取 QQ 令牌、未启动服务的错误提示、操作白名单与忙碌限制。
+- `node tests/ui_smoke.cjs`：通过，包含 Apple 芯片微信直读入口与 Intel 导入回退。
+- 实际下载 wxvault arm64 v0.1.0，SHA-256 与固定值一致；二进制 `--help`、`--debug-source history --help`、`extract --help` 运行通过。没有执行真实账号初始化、读取真实聊天或修改已安装 QQ／微信。
+- `python scripts/build_release.py --version dev-mac-connect`：生成新的 Apple Silicon `.app` 和 ZIP，打包程序的启动、平台能力、组件按钮、合成档案分析、报告与退出检查通过。
+
+以上验证不能证明任意客户端版本的真实直读可用。QQ 需用户退出桌面 QQ 并扫码登录导出服务；微信需用户给终端授权、完成临时客户端登录，再用目标会话验收。微信媒体能力限于上游可提取图片，其余媒体原件保留缺失占位。Windows／Intel 新安装包尚未在本机运行。
+
+## 初次 macOS 与分发包验证（2026-10-08）
 
 本次本机环境：macOS Apple Silicon、Python 3.14.6、PyInstaller 6.22.3。CI 声明 Python 3.12 的 Windows x64、Mac arm64 与 Mac Intel 三平台构建；本机验证不能替代尚未执行的 Windows／Intel CI。
 
 - `python run_tests.py`：124 项，123 通过、1 项 Windows batch 专用测试跳过，0 失败。
-- `node tests/ui_smoke.cjs`：通过；包含 Mac 微信切换到导入模式、禁止安装 Windows 组件、缺少语音引擎时禁用转写。
+- `node tests/ui_smoke.cjs`：通过；包含当时 Mac 微信切换到导入模式、禁止安装 Windows 组件、缺少语音引擎时禁用转写。
 - `start.command --check`：通过，支持源码启动。
 - `python scripts/build_release.py --version dev`：实际生成 Apple Silicon `.app` 和 ZIP。
 - 打包后的程序通过独立临时目录测试：`--check`、辅助进程入口拒绝未知命令、HTTP 页面资源、平台配置、包含中文和空格路径的合成聊天、关系分析、HTML 报告与正常退出。

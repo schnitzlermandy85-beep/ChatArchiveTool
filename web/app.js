@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const auth=document.querySelector('meta[name="archive-token"]').content;
 let platform='QQ',mode='direct',selectedSession=null,sessionItems=[],state={},lastLog=0,toastTimer,closing=false,offlineNotified=false;
 let activeView='export';
-let wechatSupported=true,voiceAvailable=true;
+let wechatSupported=true,voiceAvailable=true,wechatMac=false;
 const analysis={inspection:null,sourcePath:'',previewId:null,preview:null,mode:'local',pending:false};
 function workspaceBusy(){return !!state.busy||analysis.pending;}
 async function api(path,body){
@@ -29,7 +29,7 @@ function updatePlatform(){
  document.querySelectorAll('[data-platform]').forEach(button=>{const active=button.dataset.platform===platform;button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));});
  $('source-badge').textContent=platform==='QQ'?'QQ':'微信';$('source-badge').classList.toggle('wechat-badge',platform==='WeChat');
  $('qq-fields').hidden=platform!=='QQ';$('wechat-fields').hidden=platform!=='WeChat';$('qq-advanced').hidden=platform!=='QQ';$('wechat-advanced').hidden=platform!=='WeChat';$('media-field').hidden=platform!=='QQ';
- $('import-hint').textContent=platform==='QQ'?'消息文件与媒体 ZIP 需来自同一会话、同一日期范围。':(wechatSupported?'选择 chat_full_parsed.json 或其文件夹，媒体从同目录读取。':'Mac 版请导入已导出的 chat_full_parsed.json 或其文件夹；微信直接读取仅支持 Windows。');
+ $('import-hint').textContent=platform==='QQ'?'消息文件与媒体 ZIP 需来自同一会话、同一日期范围。':(wechatSupported?'选择 chat_full_parsed.json 或其文件夹，媒体从同目录读取。':'Intel Mac 暂不支持微信直读，请导入已导出的 chat_full_parsed.json 或其文件夹。');
  refreshReadiness();closeMenu();
 }
 function updateMode(){
@@ -47,10 +47,15 @@ function refreshReadiness(){
  document.querySelectorAll('[data-platform],[data-mode]').forEach(b=>b.disabled=busy);
  document.querySelectorAll('#export-form input,#export-form .browse,#export-form .text-button,#install').forEach(el=>el.disabled=busy);
  $('install').disabled=busy||!wechatSupported;
+ document.querySelectorAll('[data-component]').forEach(b=>b.disabled=busy);
+ $('install-qq').disabled=busy||state.qceInstallSupported===false;
+ $('start-qq').disabled=busy||!state.qceInstalled;
+ $('init-wechat').disabled=busy||!state.wechatInstalled;
+ $('check-wechat').disabled=busy||!state.wechatInstalled;
  document.querySelector('[data-mode="direct"]').disabled=busy||(platform==='WeChat'&&!wechatSupported);
  $('transcribe').disabled=busy||!voiceAvailable;
  $('connect').disabled=busy;$('connect').classList.toggle('spinning',busy&&state.operation==='connect');$('connect').querySelector('span').textContent=busy&&state.operation==='connect'?'连接中':sessionItems.length?'刷新':'连接 QQ';$('session-button').disabled=busy||!sessionItems.length;
- $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?'选择消息文件与媒体后即可开始':platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':'在来源设置中安装微信组件';
+ $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?'选择消息文件与媒体后即可开始':platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':(wechatMac?'先安装组件并初始化微信连接':'在来源设置中安装微信组件');
  refreshAnalysisReadiness();
 }
 function renderLogs(logs){
@@ -60,15 +65,24 @@ function renderLogs(logs){
  $('log-list').replaceChildren();for(const log of logs){const row=document.createElement('div');row.className='log-row';const time=document.createElement('time');time.textContent=log.time;const text=document.createElement('span');text.textContent=log.text;row.append(time,text);$('log-list').append(row);}
  $('log-count').textContent=logs.length;if(bottom)$('log-list').scrollTop=$('log-list').scrollHeight;
 }
+function renderComponents(data){
+ if(data.wechatMac!==undefined)wechatMac=!!data.wechatMac;
+ if(data.wechatSupported!==undefined)wechatSupported=!!data.wechatSupported;
+ $('wechat-mac-setup').hidden=!wechatMac||!wechatSupported;
+ $('qq-component-status').textContent=data.qceInstalled?'QQ 导出组件已安装':'尚未安装内置 QQ 导出组件；也可连接已有本机服务';
+ $('wechat-ready').textContent=!wechatSupported?'此 Mac 暂支持导入；微信直读需要 Apple 芯片':data.wechatReady?'微信组件已配置；可检查连接或开始导出':wechatMac?(data.wechatInstalled?'组件已安装，请初始化微信连接':'请先安装微信 Mac 导出组件'):'首次使用需要安装微信组件';
+ $('wechat-platform-hint').textContent=wechatMac?'Mac 使用 wxvault 本地读取，账号由初始化流程绑定。下方 Windows 数据目录无需填写。':'适配 Windows 微信 4.1.12+；手机记录需先迁移或同步到电脑。';
+ if(data.desktopOS==='darwin')$('qq-setup-hint').textContent=data.qceInstallSupported?'先完全退出桌面 QQ，再启动导出服务、扫码登录，最后点击连接 QQ。组件会创建独立运行副本并重新签名，与桌面 QQ 共享本机数据；导出期间不要同时打开桌面 QQ。':'Intel Mac 暂无 QCE 原生安装包；可连接自行部署并共享导出目录的本机 QCE 服务，或导入已有文件。';
+}
 function renderState(data){
  state=data;sessionItems=data.sessions||[];$('connection-label').textContent=data.connection||'未连接';$('connection-label').classList.toggle('connected',sessionItems.length>0);
- $('wechat-ready').textContent=!wechatSupported?'此系统支持导入微信聊天；直接读取仅支持 Windows':data.wechatReady?'微信组件已就绪':'首次使用需要安装微信组件';
+ renderComponents(data);
  const status=data.operation==='analyze'?(data.result?'complete':'ready'):(data.status||'ready');const labels={ready:'待创建',running:'处理中',stopping:'正在停止',complete:'已完成',error:'未完成',stopped:'已停止',connected:'已连接',installed:'已就绪'};
  $('status-badge').textContent=labels[status]||'待创建';$('status-badge').className='status-badge '+status;
  const idle=['ready','connected','installed'].includes(status)&&!data.result;
  $('empty-art').hidden=!idle;$('result-symbol').hidden=idle;$('result-symbol').className='result-symbol '+status;
- $('status-title').textContent=status==='running'?(data.operation==='connect'?'正在连接 QQ':data.operation==='install'?'正在准备微信组件':'正在创建聊天档案'):status==='complete'?'聊天档案已保存':status==='error'?'这次处理未完成':status==='stopping'?'正在结束当前任务':status==='stopped'?'任务已停止':data.result?'上次档案已保存':'从一段聊天开始';
- $('stage').textContent=data.operation==='analyze'?(data.result?'原始聊天档案已保存，可以随时回看。':'导出完成后，文字、图片和语音会一起保存在这里。'):status==='ready'?'导出完成后，文字、图片和语音会一起保存在这里。':data.stage;
+ $('status-title').textContent=status==='running'?(data.operation==='connect'?'正在连接 QQ':data.operation==='install'?'正在准备微信组件':data.operation==='component'?'正在处理导出组件':'正在创建聊天档案'):status==='complete'?'聊天档案已保存':status==='error'?'这次处理未完成':status==='stopping'?'正在结束当前任务':status==='stopped'?'任务已停止':data.result?'上次档案已保存':'从一段聊天开始';
+ $('stage').textContent=data.operation==='analyze'?(data.result?'原始聊天档案已保存，可以随时回看。':'导出完成后，文字、图片和语音会一起保存在这里。'):status==='ready'&&data.operation!=='component'?'导出完成后，文字、图片和语音会一起保存在这里。':data.stage;
  const showProgress=data.operation!=='analyze'&&(!!data.busy||status==='complete');$('task-progress').hidden=!showProgress;
  if(data.progress===null||data.progress===undefined){$('progress').removeAttribute('value');$('progress-label').textContent='处理中';}else{$('progress').value=data.progress;$('progress-label').textContent=Math.round(data.progress)+'%';}
  $('message-count').textContent=data.messageCount===null||data.messageCount===undefined?'—':data.messageCount.toLocaleString();$('voice-count').textContent=data.voiceCount===null||data.voiceCount===undefined?'—':data.voiceCount.toLocaleString();
@@ -200,8 +214,9 @@ document.querySelectorAll('[data-browse]').forEach(button=>button.addEventListen
 $('export-form').addEventListener('submit',async event=>{event.preventDefault();if(!ready()||workspaceBusy())return;if($('begin').value&&$('end').value&&$('begin').value>$('end').value&&mode==='direct'){toast('开始日期不能晚于结束日期');$('begin').focus();return;}await action('start',payload());});
 $('stop').addEventListener('click',()=>action('stop'));
 $('install').addEventListener('click',()=>action('install'));
+document.querySelectorAll('[data-component]').forEach(button=>button.addEventListener('click',()=>action('component',{action:button.dataset.component})));
 ['open-archive','nav-archive'].forEach(id=>$(id).addEventListener('click',openArchive));$('open-folder').addEventListener('click',()=>action('open-folder'));
 ['nav-logs','show-logs','analysis-show-logs'].forEach(id=>$(id).addEventListener('click',showLogs));$('close-logs').addEventListener('click',()=>$('logs-dialog').close());$('logs-dialog').addEventListener('click',event=>{if(event.target===$('logs-dialog'))$('logs-dialog').close();});
 $('exit').addEventListener('click',async()=>{if(state.busy&&!confirm('退出会停止当前任务，并等待临时缓存清理。确定退出？'))return;closing=true;try{await api('shutdown',{});$('closed-overlay').hidden=false;}catch(e){closing=false;toast(e.message);}});
 async function poll(){if(closing)return;try{renderState(await api('state'));offlineNotified=false;}catch(e){if(!offlineNotified){toast('工具连接已断开，请重新打开 ChatArchiveTool。');offlineNotified=true;}$('start').disabled=true;$('status-badge').textContent='已断开';}finally{if(!closing)setTimeout(poll,700);}}
-(async()=>{try{const config=await api('config');wechatSupported=config.wechatSupported!==false;voiceAvailable=config.voiceAvailable!==false;if(!voiceAvailable){$('transcribe').checked=false;$('voice-hint').textContent='已有转写自动复用，原始语音保留。新语音转写需使用源码版安装可选语音依赖。';}$('output').value=config.output;$('model').value=config.model;$('address').value=config.address;$('token').placeholder=config.tokenDetected?'已自动读取本机令牌；无需填写':'请输入 QCE 访问令牌';state.wechatReady=config.wechatReady;if(!config.wechatReady){$('wechat-ready').textContent='首次使用需要安装微信组件';}updatePlatform();updateMode();poll();}catch(e){toast(e.message);}})();
+(async()=>{try{const config=await api('config');state={...state,...config};renderComponents(config);wechatSupported=config.wechatSupported!==false;voiceAvailable=config.voiceAvailable!==false;if(!voiceAvailable){$('transcribe').checked=false;$('voice-hint').textContent='已有转写自动复用，原始语音保留。新语音转写需使用源码版安装可选语音依赖。';}$('output').value=config.output;$('model').value=config.model;$('address').value=config.address;$('token').placeholder=config.tokenDetected?'已自动读取本机令牌；无需填写':'请输入 QCE 访问令牌';state.wechatReady=config.wechatReady;if(!config.wechatReady){$('wechat-ready').textContent='首次使用需要安装微信组件';}updatePlatform();updateMode();poll();}catch(e){toast(e.message);}})();

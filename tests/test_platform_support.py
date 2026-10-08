@@ -67,21 +67,21 @@ class PlatformSupportTests(unittest.TestCase):
             start.assert_called_once()
 
     def test_mac_rejects_windows_install_and_direct_export_before_side_effects(self):
-        with patch.object(sys, 'platform', 'darwin'):
+        with patch.object(sys, 'platform', 'darwin'), patch('platform.machine', return_value='x86_64'):
             controller = web_app.Controller()
             self.assertFalse(controller.state['wechatSupported'])
             self.assertFalse(controller.state['wechatReady'])
-            with self.assertRaisesRegex(ValueError, '仅支持 Windows'):
+            with self.assertRaises(ValueError):
                 controller.install()
-            with self.assertRaisesRegex(ValueError, '仅支持 Windows'):
+            with self.assertRaises(ValueError):
                 controller.start({'platform': 'WeChat', 'mode': 'direct', 'output': '/unused'})
             with tempfile.TemporaryDirectory() as temp:
                 destination = Path(temp) / 'not-created'
-                with self.assertRaisesRegex(ValueError, '仅支持 Windows'):
+                with self.assertRaises(ValueError):
                     wechat_adapter.export_wechat('好友', destination)
                 self.assertFalse(destination.exists())
                 from setup_wechat import install
-                with self.assertRaisesRegex(ValueError, '仅支持 Windows'):
+                with self.assertRaises(ValueError):
                     install(destination)
                 self.assertFalse(destination.exists())
             self.assertFalse(controller.state['busy'])

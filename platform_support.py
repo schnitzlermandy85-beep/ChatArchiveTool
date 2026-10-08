@@ -1,11 +1,12 @@
 """Platform capabilities and writable locations, separate from bundled assets."""
 import importlib.util
 import os
+import platform
 from pathlib import Path
 import subprocess
 import sys
 
-WECHAT_UNSUPPORTED = '微信直接读取仅支持 Windows；请切换“导入已有文件”，选择已导出的微信聊天。'
+WECHAT_UNSUPPORTED = '微信直接读取支持 Windows 和 Apple 芯片 Mac；Intel Mac 暂请导入已有文件。'
 
 
 def data_root(source_root):
@@ -22,7 +23,7 @@ def data_root(source_root):
 
 
 def wechat_supported():
-    return sys.platform == 'win32'
+    return sys.platform == 'win32' or (sys.platform == 'darwin' and platform.machine().lower() == 'arm64')
 
 
 def require_wechat_support():

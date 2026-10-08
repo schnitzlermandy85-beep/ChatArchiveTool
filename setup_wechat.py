@@ -16,7 +16,7 @@ ROOT=pathlib.Path(__file__).resolve().parent
 COMMIT='04ef8cbde3862cff90b5f6b42c9ebfcea44ef48d'
 
 def install(target=None,log=print):
- require_wechat_support()
+ if sys.platform != 'win32':raise ValueError('这个微信安装器仅支持 Windows；Mac 请使用 wxvault 组件')
  target=target if target is not None else data_root(ROOT)/'.wechat-packages'
  target=pathlib.Path(target).resolve();target.mkdir(parents=True,exist_ok=True);tags=set(sys_tags());done={}
  pending=[Requirement(n) for n in ['zstandard','Pillow>=9','psutil>=5.9','imageio-ffmpeg>=0.4.9','uiautomation>=2.0.18','pywin32>=305','pyperclip>=1.8.2','colorama>=0.4.6','cryptography>=41','winsdk>=1.0.0b10']]

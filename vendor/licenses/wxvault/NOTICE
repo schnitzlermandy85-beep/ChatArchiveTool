@@ -1,0 +1,18 @@
+wxvault
+Copyright 2026 wxvault contributors
+
+This product is a modified fork of:
+
+    wx-cli — https://github.com/jackwener/wx-cli
+    Licensed under the Apache License, Version 2.0.
+
+Modifications in this fork include: removal of the persistent daemon /
+IPC server in favor of a one-shot in-process execution model, and a
+rename of the binary, package, and config directory to "wxvault".
+
+The upstream project was itself inspired by:
+
+    ylytdeng/wechat-decrypt — https://github.com/ylytdeng/wechat-decrypt
+
+This software is distributed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.

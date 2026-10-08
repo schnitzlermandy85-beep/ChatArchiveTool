@@ -1,6 +1,7 @@
 """End-to-end verification of the packaged executable, with isolated synthetic data."""
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -46,7 +47,12 @@ def main():
             config = api('config')
             assert config['output'] == str(root / 'data/exports')
             if sys.platform == 'darwin':
-                assert config['wechatSupported'] is False
+                assert config['wechatSupported'] == (platform.machine().lower() == 'arm64')
+                assert config['wechatMac'] is True
+                assert config['wechatInstalled'] is False
+                assert config['qceInstalled'] is False
+            assert 'data-component="install-qq"' in page
+            assert 'data-component="init-wechat"' in page
             inspection = api('analysis/inspect', {'archive': str(source)})
             preview = api('analysis/prepare', {'archive': str(source),
                 'selfId': inspection['participants'][0]['id'], 'relationship': 'friend', 'mode': 'local'})

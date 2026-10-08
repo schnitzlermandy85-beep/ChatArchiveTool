@@ -65,3 +65,6 @@ build/
 dist/
 *.app/
 .DS_Store
+
+# Installed upstream exporters (may contain local login configuration)
+components/

@@ -12,6 +12,9 @@ def runtime_path():
 
 def export_wechat(keyword,dest,db_dir='',log=print,stop=None,filters=None):
  require_wechat_support()
+ if sys.platform == 'darwin':
+  from mac_wechat import export_wechat_mac
+  return export_wechat_mac(keyword,dest,db_dir,log,stop,filters)
  stop=stop or threading.Event();dest=pathlib.Path(dest).resolve();dest.mkdir(parents=True,exist_ok=True)
  if not keyword.strip():raise ValueError('请输入微信好友准确备注、昵称、wxid或群名')
  if not (runtime_path()/'wechatauto').exists():raise RuntimeError('微信导出依赖尚未安装，请先点击“安装微信组件”')

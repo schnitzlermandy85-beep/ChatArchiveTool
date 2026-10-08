@@ -48,7 +48,7 @@ def main():
     shutil.copytree(ROOT / 'examples', stage / 'examples')
     shutil.copytree(ROOT / 'vendor/licenses', stage / 'licenses')
     # Preserve runtime notices alongside the application's vendored licenses.
-    for package in ('pyinstaller', 'packaging', 'certifi', 'Pillow'):
+    for package in ('pyinstaller', 'packaging', 'certifi', 'Pillow', 'zstandard'):
         metadata = distribution(package)
         for item in metadata.files or []:
             if '.dist-info/' in str(item) and any(word in item.name.lower() for word in ('license', 'copying', 'notice')):

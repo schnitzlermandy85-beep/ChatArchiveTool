@@ -54,7 +54,8 @@ class QCE:
   req=urllib.request.Request(self.base+path,data=json.dumps(body).encode() if body is not None else None,headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/json'})
   try:
    with self.op.open(req,timeout=60) as r:result=json.load(r)
-  except urllib.error.HTTPError as e:raise RuntimeError(f'QCE HTTP {e.code}：检查登录状态和访问令牌') from None
+  except urllib.error.HTTPError as e:raise RuntimeError(f'QCE HTTP {e.code}：检查导出终端中的登录状态和访问令牌，再重新连接') from None
+  except urllib.error.URLError:raise RuntimeError('无法连接 QQ 导出服务：请先安装并启动 QQ 导出组件，在终端扫码登录；仅打开普通 QQ 无法连接。若已启动，请核对 QCE 地址与端口。') from None
   if not result.get('success',True):raise RuntimeError(str(result.get('error') or result.get('message') or 'QCE请求失败'))
   return result.get('data',result)
  def sessions(self):
