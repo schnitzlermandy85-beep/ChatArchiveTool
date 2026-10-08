@@ -46,17 +46,18 @@ function refreshReadiness(){
  $('stop').hidden=!state.busy||['connect','analyze'].includes(state.operation);$('stop').disabled=state.status==='stopping';
  document.querySelectorAll('[data-platform],[data-mode]').forEach(b=>b.disabled=busy);
  document.querySelectorAll('#export-form input,#export-form .browse,#export-form .text-button,#install').forEach(el=>el.disabled=busy);
- $('install').disabled=busy||!wechatSupported;
+ $('install').disabled=busy||!wechatSupported||(wechatMac&&!!state.wechatPreflight?.blocked);
  document.querySelectorAll('[data-component]').forEach(b=>b.disabled=busy);
  $('install-qq').disabled=busy||state.qceInstallSupported===false;
  $('start-qq').disabled=busy||!state.qceInstalled;
- $('init-wechat').disabled=busy||!state.wechatInstalled||!!state.wechatConnection?.active;
+ $('init-wechat').disabled=busy||!state.wechatInstalled||!!state.wechatConnection?.active||!!state.wechatPreflight?.blocked;
+ $('install-wechat-mac').disabled=busy||!!state.wechatPreflight?.blocked;
  $('check-wechat').disabled=busy||!state.wechatInstalled||!!state.wechatConnection?.active;
  document.querySelector('[data-mode="direct"]').disabled=busy||(platform==='WeChat'&&!wechatSupported);
  $('transcribe').disabled=busy||!voiceAvailable;
  document.querySelectorAll('[data-help],#wechat-step-help').forEach(b=>b.disabled=false);
  $('connect').disabled=busy;$('connect').classList.toggle('spinning',busy&&state.operation==='connect');$('connect').querySelector('span').textContent=busy&&state.operation==='connect'?'连接中':sessionItems.length?'刷新':'准备并连接 QQ';$('session-button').disabled=busy||!sessionItems.length;
- $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?'选择消息文件与媒体后即可开始':platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':(wechatMac?'先准备组件，再连接已登录微信':'在来源设置中安装微信组件');
+ $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?'选择消息文件与媒体后即可开始':platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':(wechatMac?(state.wechatPreflight?.blocked?'当前微信不支持此直读方式，请查看提示或导入已有文件':'先准备组件，再连接已登录微信'):'在来源设置中安装微信组件');
  refreshAnalysisReadiness();
 }
 function renderLogs(logs){
@@ -70,10 +71,12 @@ function renderComponents(data){
  if(data.wechatMac!==undefined)wechatMac=!!data.wechatMac;
  if(data.wechatSupported!==undefined)wechatSupported=!!data.wechatSupported;
  $('wechat-mac-setup').hidden=!wechatMac||!wechatSupported;
- renderWechatStep(data.wechatConnection||{});
+ renderWechatStep(data.wechatPreflight?.blocked&&!data.wechatReady?data.wechatPreflight:(data.wechatConnection||{}));
+ $('wechat-import-route').hidden=!data.wechatPreflight?.blocked;
+ $('wechat-experimental-note').hidden=!!data.wechatPreflight?.blocked;
  document.querySelectorAll('.mac-only').forEach(el=>el.hidden=!wechatMac);
  $('qq-component-status').textContent=data.qceInstalled?'QQ 导出组件已安装':'尚未安装内置 QQ 导出组件；也可连接已有本机服务';
- $('wechat-ready').textContent=!wechatSupported?'此 Mac 暂支持导入；微信直读需要 Apple 芯片':data.wechatReady?'微信读取配置已就绪；可检查连接或开始导出':wechatMac?(data.wechatInstalled?'组件已安装，请连接已登录微信':'请先安装微信 Mac 导出组件'):'首次使用需要安装微信组件';
+ $('wechat-ready').textContent=data.wechatPreflight?.blocked&&!data.wechatReady?data.wechatPreflight.title:!wechatSupported?'此 Mac 暂支持导入；微信直读需要 Apple 芯片':data.wechatReady?'微信读取配置已就绪；可检查连接或开始导出':wechatMac?(data.wechatInstalled?'组件已安装，请连接已登录微信':'请先安装微信 Mac 导出组件'):'首次使用需要安装微信组件';
  $('wechat-platform-hint').textContent=wechatMac?'Mac 默认自动查找账号。多账号时可选择当前账号的 db_storage 文件夹，再连接。':'适配 Windows 微信 4.1.12+；手机记录需先迁移或同步到电脑。';
  if(data.desktopOS==='darwin')$('qq-setup-hint').textContent=data.qceInstallSupported?'先完全退出桌面 QQ（⌘Q），再点“准备并连接 QQ”并扫码，好友列表会自动加载。组件会创建独立运行副本并重新签名，与桌面 QQ 共享本机数据；导出期间不要同时打开桌面 QQ。':'Intel Mac 暂无 QCE 原生安装包；可连接自行部署并共享导出目录的本机 QCE 服务，或导入已有文件。';
 }
@@ -125,7 +128,7 @@ function renderWechatStep(step){
  $('wechat-step-detail').textContent=step.detail||'保持日常使用的微信登录。首次连接需要在终端完成系统授权。';
  $('cancel-wechat').hidden=!step.active;$('cancel-wechat').disabled=step.code==='cancelling';
  $('wechat-next-actions').replaceChildren();
- const actions={disk_permission:[['full-disk-access','打开完全磁盘访问']],developer_permission:[['developer-tools','打开开发者工具设置']],tools_missing:[['install-tools','安装系统工具']],wechat_not_running:[['open-wechat','打开微信']],password:[['show-terminal','显示终端']],terminal_pending:[['show-terminal','显示终端']],cancelling:[['show-terminal','显示终端']]};
+ const actions={disk_permission:[['full-disk-access','打开完全磁盘访问']],tools_missing:[['install-tools','安装系统工具']],wechat_not_running:[['open-wechat','打开微信']],password:[['show-terminal','显示终端']],terminal_pending:[['show-terminal','显示终端']],cancelling:[['show-terminal','显示终端']]};
  for(const [actionName,label] of actions[step.code]||[]){const button=document.createElement('button');button.type='button';button.className='button secondary small';button.textContent=label;button.addEventListener('click',()=>action('setup',{action:actionName}));$('wechat-next-actions').append(button);}
 }
 async function connectQQ(){
@@ -252,7 +255,10 @@ async function poll(){if(closing)return;try{renderState(await api('state'));offl
 $('help-search').addEventListener('input',filterHelp);
 document.querySelectorAll('[data-help]').forEach(button=>button.addEventListener('click',()=>openHelp(button.dataset.help)));
 document.querySelectorAll('[data-setup]').forEach(button=>button.addEventListener('click',()=>action('setup',{action:button.dataset.setup})));
-$('wechat-step-help').addEventListener('click',()=>openHelp(state.wechatConnection?.topic||'wechat'));
+$('wechat-step-help').addEventListener('click',()=>openHelp(state.wechatPreflight?.blocked?'wechat':state.wechatConnection?.topic||'wechat'));
+$('wechat-import-route').addEventListener('click',()=>{mode='import';updateMode();toast('选择上游导出的 chat_full_parsed.json 或整个结果文件夹。');});
 $('cancel-wechat').addEventListener('click',()=>action('wechat-cancel'));
 $('help-to-export').addEventListener('click',()=>showView('export'));
 $('help-to-analysis').addEventListener('click',()=>showView('analysis'));
+
+$('qce-upstream-ui').addEventListener('click',()=>action('qce-ui',{address:$('address').value.trim(),token:$('token').value.trim()}));

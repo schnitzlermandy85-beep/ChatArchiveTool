@@ -20,6 +20,7 @@ import zipfile
 
 from core import ROOT, Cancelled, child_command, write_json
 from platform_support import data_root
+from wechat_preflight import inspect_wechat
 
 QCE_VERSION = 'v6.3.2'
 WXVAULT_VERSION = 'v0.1.0'
@@ -66,7 +67,8 @@ def status():
             'wechatMac': sys.platform == 'darwin', 'wechatMacSupported': mac_arm(),
             'wechatInstalled': wxvault_binary().is_file() if mac_arm() else False,
             'wechatConfigured': wxvault_configured() if mac_arm() else False,
-            'wechatConnection': connection_status() if mac_arm() else {}}
+            'wechatConnection': connection_status() if mac_arm() else {},
+            'wechatPreflight': inspect_wechat() if mac_arm() else {}}
 
 
 def check_stop(stop):
@@ -215,7 +217,10 @@ CONNECTION_MESSAGES = {
     'validating': ('正在验证读取结果', '验证在本机完成，请稍候。', 'wechat'),
     'complete': ('微信连接检查通过', '现在可以填写好友备注、昵称或 wxid 并导出。', 'wechat'),
     'disk_permission': ('终端还没有文件读取权限', '打开完全磁盘访问设置，允许终端，然后完全退出终端再重试。', 'permissions'),
-    'developer_permission': ('macOS 拒绝读取微信进程', '在开发者工具设置中允许终端，退出并重新打开终端后重试。当前微信版本仍可能不兼容；本工具不会自动退出或重签微信。', 'permissions'),
+    'developer_permission': ('macOS 拒绝读取微信进程', '原版微信可能受强化运行时保护；管理员密码和文件访问权限不能解除该保护。请查看读取条件，停止重复授权；可使用上游导出文件。', 'wechat'),
+    'protected_client': ('原版微信受到系统保护', '此 Mac 不支持当前直读方案，已在请求密码前停止。请使用 wechat-chat-export 的 Windows 导出结果或已有兼容文件。', 'wechat'),
+    'unverified_client': ('尚无法确认微信读取条件', '未启动读取或请求密码。请检查安装，或导入已有文件。', 'wechat'),
+    'app_missing': ('没有找到电脑微信', '请检查电脑微信的安装位置，或导入已有文件。', 'wechat'),
     'tools_missing': ('缺少 Apple 命令行工具', '点击安装系统工具，在系统弹窗中完成安装后重试。无需安装完整 Xcode。', 'permissions'),
     'wechat_not_running': ('请先登录电脑微信', '打开原来的微信并登录，再回来连接。', 'wechat'),
     'multiple_processes': ('发现多个微信进程', '请先手动关闭多余的微信副本，仅保留日常使用的微信。', 'wechat'),
@@ -265,6 +270,9 @@ def connection_status():
 
 
 def initialize_wechat(db_dir=''):
+    eligibility = inspect_wechat() if mac_arm() else {}
+    if eligibility.get('blocked'):
+        raise ValueError(eligibility['title'] + '：' + eligibility['detail'])
     if not mac_arm() or not wxvault_binary().is_file():
         raise ValueError('请先点击“准备微信组件”')
     if connection_status().get('active'):

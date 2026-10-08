@@ -94,6 +94,10 @@ def run(request):
         if (job / 'cancel').exists():
             raise ConnectionFailure('cancelled')
         write_stage(job, 'checking', 'checking')
+        from wechat_preflight import inspect_wechat
+        eligibility = inspect_wechat()
+        if eligibility.get('blocked'):
+            raise ConnectionFailure(eligibility['code'])
         executable = Path(data['executable'])
         hook = Path(data['hook'])
         if not executable.is_file() or not hook.is_file():

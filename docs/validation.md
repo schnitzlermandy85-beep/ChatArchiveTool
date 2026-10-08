@@ -1,4 +1,14 @@
-# 验证记录
+# 当前支持边界与验证
+
+## v0.1.3：从真实故障核对上游（2026-10-08）
+
+- 对照 zhuzhangxue/wechat-chat-export 官方 README：其直接读取支持 Windows，不支持 Mac。现有 Windows 适配与 Mac 文件导入继续复用其格式与导出逻辑。
+- 本机 Mac 原版微信 4.1.13 的签名启用 Hardened Runtime，没有 get-task-allow，SIP 启用；实际连接状态为 developer_permission。依 Apple 文档，此限制不能仅靠 sudo 或完全磁盘访问解决。增加只读预检，在密码或进程读取前停止不受支持的尝试。
+- 本机 QQChatExporter v6.3.2 `/health` 返回 healthy / plugin / online=true；现有适配成功读取非空会话列表，当前运行的应用也显示已连接。未输出会话姓名、账号、令牌或聊天正文，未发起聊天导出；不能以此证明所有消息与媒体的完整性。
+- 对照官方 Rust API：独立查看模式不可导出新聊天；recent-contacts 是补充会话接口。新增健康状态判断与该补充接口失败回退，并提供原版导出界面入口。
+- 回归 158 项，本机通过 157 项、跳过 1 项 Windows 专用测试；前端检查覆盖保护状态下禁用无效授权并显示导入入口。
+- 下方是历史验证记录，不能据其旧版说明推断当前原版 Mac 微信可直读。
+
 
 ## Mac 直读适配验证（2026-10-08）
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime,hashlib,json,mimetypes,os,pathlib,re,secrets,subprocess,sys,threading,time,urllib.parse,webbrowser
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from socketserver import TCPServer
-from core import ROOT,QCE,bundle,Cancelled,safe_child,child_command
+from core import ROOT,QCE,QCEError,bundle,Cancelled,safe_child,child_command
 from wechat_adapter import export_wechat,bundle_wechat,runtime_path
 from relationship import inspect_archive,prepare_analysis,analyze_prepared
 from relationship_report import write_report
@@ -232,7 +232,16 @@ class Controller:
    desktop_exporters.check_stop(self.stop)
    token=payload.get('token') or desktop_exporters.refresh_qce_token() or self.token
    try:
-    sessions=QCE(address,token,timeout=4).sessions()
+    client=QCE(address,token,timeout=4)
+    health=client.health()
+    if health.get('mode')=='standalone':raise QCEError('QQChatExporter 当前是只查看旧文件的独立模式，不能读取新的聊天。请在原版界面确认模式，关闭独立模式后启动完整 QQ 导出服务。',409)
+    if health.get('online') is False:
+     self.log('QQ 导出服务已启动，账号尚未登录。请在导出窗口完成扫码。')
+     self.stop.wait(2);continue
+    sessions=client.sessions()
+   except QCEError as error:
+    if error.status in (401,403,409):raise
+    self.stop.wait(2);continue
    except (RuntimeError,OSError,ValueError):
     self.stop.wait(2)
     continue
@@ -305,6 +314,10 @@ def make_server(controller=None,port=0):
     elif path=='/api/stop':controller.cancel()
     elif path=='/api/install':controller.install()
     elif path=='/api/component':controller.component_action(p.get('action'),p)
+    elif path=='/api/qce-ui':
+     client=QCE(p.get('address') or 'http://127.0.0.1:40653')
+     token=p.get('token') or desktop_exporters.refresh_qce_token() or controller.token
+     webbrowser.open(client.base+'/qce/auth'+('?token='+urllib.parse.quote(token,safe='') if token else ''))
     elif path=='/api/setup':desktop_exporters.open_setup(p.get('action'))
     elif path=='/api/wechat-cancel':desktop_exporters.cancel_wechat()
     elif path=='/api/browse':

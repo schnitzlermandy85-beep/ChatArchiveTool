@@ -16,6 +16,12 @@ import web_app
 
 
 class ConnectionGuideTests(unittest.TestCase):
+    def setUp(self):
+        # Synthetic readable target; never depend on this machine's real app.
+        for target in ('desktop_exporters.inspect_wechat', 'wechat_preflight.inspect_wechat'):
+            mock = patch(target, return_value={'blocked': False, 'code': 'eligible'})
+            mock.start(); self.addCleanup(mock.stop)
+
     def test_account_selection_is_explicit_when_multiple_accounts_exist(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(Path, 'home', return_value=Path(tmp)):
             root = Path(tmp) / 'Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files'
