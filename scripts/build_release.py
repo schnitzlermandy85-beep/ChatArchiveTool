@@ -19,6 +19,9 @@ def main():
     args = parser.parse_args()
     if not args.version or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_' for c in args.version):
         parser.error('Version may only contain ASCII letters, digits, dots, underscores and hyphens')
+    expected_version = (ROOT / 'VERSION').read_text(encoding='ascii').strip()
+    if args.version != 'dev' and args.version != expected_version:
+        parser.error('Release version must match VERSION: ' + expected_version)
     arch = platform.machine().lower()
     if sys.platform == 'darwin':
         target = 'macOS-AppleSilicon' if arch == 'arm64' else 'macOS-Intel' if arch == 'x86_64' else None
@@ -32,6 +35,9 @@ def main():
                     '--distpath', str(ROOT / 'dist'), '--workpath', str(ROOT / 'build/pyinstaller'),
                     str(ROOT / 'ChatArchiveTool.spec')], cwd=ROOT, check=True,
                    env={**os.environ, 'PYINSTALLER_CONFIG_DIR': str(ROOT / 'build/cache')})
+    if sys.platform == 'darwin':
+        from build_wechat_share import build
+        build(ROOT / 'dist/ChatArchiveTool.app', expected_version)
     name = f'ChatArchiveTool-{args.version}-{target}'
     stage = ROOT / 'build/release' / name
     if stage.exists():

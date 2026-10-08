@@ -64,11 +64,9 @@ def wxvault_configured():
 def status():
     return {'desktopOS': sys.platform, 'qceInstallSupported': qce_supported(),
             'qceInstalled': qce_launcher() is not None,
-            'wechatMac': sys.platform == 'darwin', 'wechatMacSupported': mac_arm(),
-            'wechatInstalled': wxvault_binary().is_file() if mac_arm() else False,
-            'wechatConfigured': wxvault_configured() if mac_arm() else False,
-            'wechatConnection': connection_status() if mac_arm() else {},
-            'wechatPreflight': inspect_wechat() if mac_arm() else {}}
+            'wechatMac': sys.platform == 'darwin', 'wechatMacSupported': False,
+            'wechatInstalled': False, 'wechatConfigured': False,
+            'wechatConnection': {}, 'wechatPreflight': {}}
 
 
 def check_stop(stop):
@@ -270,27 +268,8 @@ def connection_status():
 
 
 def initialize_wechat(db_dir=''):
-    eligibility = inspect_wechat() if mac_arm() else {}
-    if eligibility.get('blocked'):
-        raise ValueError(eligibility['title'] + '：' + eligibility['detail'])
-    if not mac_arm() or not wxvault_binary().is_file():
-        raise ValueError('请先点击“准备微信组件”')
-    if connection_status().get('active'):
-        raise ValueError('微信连接准备正在进行，请先查看界面中的当前步骤')
-    root = tools_root() / 'connections/wechat'
-    identifier = uuid.uuid4().hex
-    job = root / identifier
-    job.mkdir(parents=True, mode=0o700)
-    write_json(job / 'request.json', {'executable': str(wxvault_binary()),
-        'hook': str(ROOT / 'vendor/wechat_live/hook.py'), 'dbDir': db_dir})
-    write_json(job / 'status.json', {'phase': 'pending', 'code': 'terminal_pending', 'at': time.time()})
-    write_json(root / 'current.json', {'id': identifier})
-    command = shlex.join(child_command('wechat_connect', job / 'request.json'))
-    try:
-        open_terminal_script('WeChat-connect', command)
-    except Exception:
-        write_json(job / 'status.json', {'phase': 'failed', 'code': 'unexpected_error', 'at': time.time()})
-        raise
+    from native_share import MAC_ROUTE
+    raise ValueError(MAC_ROUTE)
 
 
 def mark_wechat_verified():
@@ -327,12 +306,9 @@ def diagnostics():
           'title': 'QQ 导出服务已启动' if qq_open else 'QQ 组件已安装，服务还没有启动' if info['qceInstalled'] else '尚未安装 QQ 导出组件',
           'detail': '点击连接 QQ 读取会话；如果提示未登录，请完成扫码。' if qq_open else '点击“准备并连接 QQ”，按界面提示完成安装和启动。普通 QQ 登录不会自动开启导出服务。',
           'topic': 'qq'}
-    wx = connection_status()
-    if not wx:
-        wx = {'code': 'configured' if info['wechatConfigured'] else 'not_configured',
-              'title': '微信已有本机配置，可先检查连接' if info['wechatConfigured'] else '微信尚未完成本机读取授权',
-              'detail': '点击检查连接，验证当前账号是否可读。' if info['wechatConfigured'] else '准备组件后，连接已登录的微信。系统可能要求一次授权；不再使用退出微信的副本初始化。',
-              'topic': 'wechat', 'active': False}
+    from native_share import MAC_ROUTE
+    wx = {'code': 'native_zip', 'title': 'Mac 微信使用原生 ZIP 导出',
+          'detail': MAC_ROUTE, 'topic': 'wechat', 'active': False}
     return {'qq': qq, 'wechat': wx}
 
 

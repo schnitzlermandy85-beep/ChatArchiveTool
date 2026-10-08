@@ -8,6 +8,7 @@ from wechat_adapter import export_wechat,bundle_wechat,runtime_path
 from relationship import inspect_archive,prepare_analysis,analyze_prepared
 from relationship_report import write_report
 import desktop_exporters
+import native_share
 from platform_support import data_root,wechat_supported,require_wechat_support,open_folder,voice_available
 
 def model_path():
@@ -32,8 +33,8 @@ class Controller:
   self.lock=threading.RLock();self.stop=threading.Event();self.last=None;self.sessions=[];self.token='';self.logs=[];self.seq=0
   self.analysis_last=None;self.analysis_preview=None
   self.state={'busy':False,'operation':None,'status':'ready','stage':'准备好后，开始创建你的聊天档案。','progress':None,'messageCount':None,'voiceCount':None,'result':False,'summary':None,'connection':'未连接','wechatSupported':wechat_supported(),'wechatReady':wechat_supported() and (runtime_path()/'wechatauto').exists()}
-  self.state.update(desktop_exporters.status())
-  if sys.platform=='darwin':self.state['wechatReady']=self.state['wechatInstalled'] and self.state['wechatConfigured'] and self.state.get('wechatConnection',{}).get('phase') not in ('pending','checking','authorizing','attaching','reading','validating','failed','cancelling')
+  self.state.update(desktop_exporters.status(),**native_share.share_status())
+  if sys.platform=='darwin':self.state['wechatReady']=False
   self.state.update(analysisArchive='',analysisResult=False,analysisReportUrl='',analysisSummary=None)
   security=pathlib.Path.home()/'.qq-chat-exporter/security.json'
   if security.exists():
@@ -41,8 +42,8 @@ class Controller:
    except Exception:pass
  def snapshot(self):
   with self.lock:
-   self.state.update(desktop_exporters.status())
-   if sys.platform=='darwin':self.state['wechatReady']=self.state['wechatInstalled'] and self.state['wechatConfigured'] and self.state.get('wechatConnection',{}).get('phase') not in ('pending','checking','authorizing','attaching','reading','validating','failed','cancelling')
+   self.state.update(desktop_exporters.status(),**native_share.share_status())
+   if sys.platform=='darwin':self.state['wechatReady']=False
   with self.lock:return {**self.state,'logs':list(self.logs),'sessions':[{'index':i,'name':str(c.get('remark') or c.get('name') or c.get('peerName') or c['peerUid']),'kind':'群聊' if int(c['chatType'])==2 else '私聊'} for i,c in enumerate(self.sessions)]}
  def log(self,message):
   with self.lock:
@@ -116,7 +117,7 @@ class Controller:
     a,b=client.export(peer,target,filters,self.log,self.stop,roaming) if client else (src,media)
     summary=bundle(a,b,target,model,transcribe,self.log,self.stop)
    with self.lock:
-    self.last=target;self.analysis_preview=None;self.state.update(status='complete',stage='聊天档案已保存。现在可以选择关系类型，回顾你们的互动。',progress=100,messageCount=summary['messageCount'],voiceCount=summary['voiceTranscription'].get('完成',0),result=True,summary=summary,analysisArchive=str(target))
+    self.last=target;self.analysis_preview=None;self.state.update(status='complete',stage=('聊天档案已保存，可打开浏览。原生文件缺少账号 ID，暂不支持关系分析。' if summary.get('analysisEligible') is False else '聊天档案已保存。现在可以选择关系类型，回顾你们的互动。'),progress=100,messageCount=summary['messageCount'],voiceCount=summary['voiceTranscription'].get('完成',0),result=True,summary=summary,analysisArchive=str(target))
    self.log('档案已保存：'+str(target))
   self.launch('import' if mode=='import' else 'export',job)
  def inspect_analysis(self,p):
@@ -190,6 +191,7 @@ class Controller:
    with self.lock:self.state.update(wechatReady=True,status='installed',stage='微信组件已就绪，可以开始导出。',progress=100)
   self.launch('install',job)
  def component_action(self,action,payload=None):
+  if sys.platform=='darwin' and action in ('install-wechat','init-wechat','check-wechat'):raise ValueError(native_share.MAC_ROUTE)
   if action not in ('install-qq','start-qq','prepare-qq','install-wechat','init-wechat','check-wechat'):raise ValueError('未知组件操作')
   def job():
    if action=='prepare-qq':
@@ -285,7 +287,7 @@ def make_server(controller=None,port=0):
     f=ROOT/'web'/path[1:];self.send(200,f.read_bytes(),'text/css; charset=utf-8' if path.endswith('css') else 'text/javascript; charset=utf-8')
    elif path=='/api/state' and self.authenticated():self.send(200,controller.snapshot())
    elif path=='/api/diagnostics' and self.authenticated():self.send(200,desktop_exporters.diagnostics())
-   elif path=='/api/config' and self.authenticated():self.send(200,{'output':str(data_root(ROOT)/'exports'),**desktop_exporters.status(),'wechatSupported':wechat_supported(),'voiceAvailable':voice_available(),'model':model_path(),'address':'http://127.0.0.1:40653','tokenDetected':bool(controller.token),'wechatReady':controller.state['wechatReady']})
+   elif path=='/api/config' and self.authenticated():self.send(200,{'output':str(data_root(ROOT)/'exports'),**desktop_exporters.status(),**native_share.share_status(),'wechatSupported':wechat_supported(),'voiceAvailable':voice_available(),'model':model_path(),'address':'http://127.0.0.1:40653','tokenDetected':bool(controller.token),'wechatReady':controller.state['wechatReady']})
    elif path.startswith('/archive/') or path.startswith('/analysis/'):
     cookie=self.headers.get('Cookie','')
     analysis_route=path.startswith('/analysis/')
@@ -319,6 +321,8 @@ def make_server(controller=None,port=0):
      token=p.get('token') or desktop_exporters.refresh_qce_token() or controller.token
      webbrowser.open(client.base+'/qce/auth'+('?token='+urllib.parse.quote(token,safe='') if token else ''))
     elif path=='/api/setup':desktop_exporters.open_setup(p.get('action'))
+    elif path=='/api/wechat-share':
+     self.send(200,{'message':native_share.enable_share()});return
     elif path=='/api/wechat-cancel':desktop_exporters.cancel_wechat()
     elif path=='/api/browse':
      kind=p.get('kind');category=p.get('category','messages')

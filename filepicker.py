@@ -21,7 +21,7 @@ def choose(kind, category='messages'):
     try:
         if kind == 'folder':
             return filedialog.askdirectory(parent=root, title='选择文件夹')
-        types = [('媒体压缩包', '*.zip')] if category == 'zip' else [('聊天数据', '*.json *.jsonl *.zip'), ('所有文件', '*.*')]
+        types = [('媒体压缩包', '*.zip')] if category == 'zip' else [('聊天数据', '*.json *.jsonl *.zip *.txt'), ('所有文件', '*.*')]
         return filedialog.askopenfilename(parent=root, title='选择聊天导出文件', filetypes=types)
     finally:
         root.destroy()

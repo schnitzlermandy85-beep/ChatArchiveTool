@@ -104,12 +104,10 @@ def entrypoint():
             from wechat_worker import run
             run(sys.argv[3])
             return 0
-        if sys.argv[2] == 'wechat_connect' and len(sys.argv) == 4:
-            from desktop_exporters import mac_arm
-            if not mac_arm():
-                return 2
-            from wechat_connect import run as connect_wechat
-            return connect_wechat(sys.argv[3])
+        if sys.argv[2] == 'wechat_connect':
+            from native_share import MAC_ROUTE
+            print(MAC_ROUTE, flush=True)
+            return 2
         return 2
     return main()
 

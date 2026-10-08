@@ -27,8 +27,8 @@ def main():
             (job / 'cancel').touch()
             (job / 'request.json').write_text('{}')
             cancelled = subprocess.run([executable, '--helper', 'wechat_connect', str(job / 'request.json')], env=env, timeout=15)
-            assert cancelled.returncode == 1
-            assert json.loads((job / 'status.json').read_text())['code'] == 'cancelled'
+            assert cancelled.returncode == 2
+            assert not (job / 'status.json').exists()  # Retired helper never starts a reader.
         source = root / '示例 聊天'
         shutil.copytree(Path(__file__).resolve().parents[1] / 'examples/synthetic-chat', source)
         process = subprocess.Popen([executable, '--no-browser'], env=env)
@@ -53,8 +53,12 @@ def main():
 
             config = api('config')
             assert config['output'] == str(root / 'data/exports')
+            assert config['appVersion'] == (Path(__file__).resolve().parents[1] / 'VERSION').read_text().strip()
             if sys.platform == 'darwin':
-                assert config['wechatSupported'] == (platform.machine().lower() == 'arm64')
+                assert config['wechatNative'] and config['wechatShareBundled']
+                assert not config['wechatSupported'] and not config['wechatReady']
+            if sys.platform == 'darwin':
+                assert config['wechatSupported'] is False
                 assert config['wechatMac'] is True
                 assert config['wechatInstalled'] is False
                 assert config['qceInstalled'] is False
@@ -78,9 +82,28 @@ def main():
             request = urllib.request.Request(url + 'analysis/report.html', headers={'Cookie': 'archive_session=' + token})
             with urllib.request.urlopen(request, timeout=5) as response:
                 assert 'html' in response.read().decode('utf-8').lower()
+            # Exercise native import inside the frozen executable, including dynamic imports.
+            import zipfile
+            native = root / '微信合成测试.zip'
+            with zipfile.ZipFile(native, 'w') as archive:
+                archive.writestr('聊天记录.txt', '·测试甲\n2026年10月8日 10:00\n测试文字\n\n·测试乙\n2026年10月8日 10:01\n[图片] test.png\n')
+                archive.writestr('media/test.png', b'synthetic-image')
+            api('start', {'platform': 'WeChat', 'mode': 'import', 'source': str(native),
+                          'output': str(root / 'native-result'), 'transcribe': False})
+            deadline = time.monotonic() + 20
+            while True:
+                state = api('state')
+                if not state['busy']: break
+                if time.monotonic() > deadline: raise RuntimeError('Packaged native import timed out')
+                time.sleep(.1)
+            assert state['status'] == 'complete', state
+            assert state['summary']['messageCount'] == 2
+            assert state['summary']['media']['image'] == 1
+            assert not state['summary']['media'].get('missing_image')
+            assert state['summary']['historyCompleteness'] == 'selected_messages_only'
             api('shutdown', {})
             assert process.wait(timeout=10) == 0
-            print('PASS: packaged startup, assets, platform config, synthetic chat analysis, report, shutdown')
+            print('PASS: packaged startup, assets, platform config, synthetic chat analysis, report, native WeChat ZIP import, shutdown')
         finally:
             if process.poll() is None:
                 process.terminate()

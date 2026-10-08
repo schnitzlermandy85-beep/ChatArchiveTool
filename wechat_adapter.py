@@ -50,6 +50,8 @@ def timestamp_ms(value):
 
 def bundle_wechat(source,dest,model='',transcribe=True,log=print,stop=None,filters=None):
  stop=stop or threading.Event();filters=filters or {};source=pathlib.Path(source).resolve()
+ from wechat_native import is_native,bundle_native
+ if is_native(source):return bundle_native(source,dest,model,transcribe,log,stop,filters)
  if source.is_dir():source=source/'chat_full_parsed.json'
  meta=json.loads(source.read_text(encoding='utf-8-sig'))
  if not isinstance(meta,dict) or 'exporter_version' not in meta or not isinstance(meta.get('messages'),list):raise ValueError('请选择wechat-chat-export导出的chat_full_parsed.json或它所在的文件夹')

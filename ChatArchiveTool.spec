@@ -4,7 +4,7 @@ from pathlib import Path
 
 root = Path(SPECPATH)
 datas = [(str(root / name), name) for name in ('web', 'vendor')]
-datas += [(str(root / name), '.') for name in ('viewer.html', 'THIRD_PARTY_NOTICES.md')]
+datas += [(str(root / name), '.') for name in ('viewer.html', 'THIRD_PARTY_NOTICES.md', 'VERSION')]
 a = Analysis(
     ['app.py'],
     pathex=[str(root / 'vendor/wechat_export')],
@@ -24,4 +24,6 @@ if sys.platform == 'darwin':
     app = BUNDLE(coll, name='ChatArchiveTool.app', bundle_identifier='com.chatarchivetool.desktop',
                  info_plist={'CFBundleDisplayName': 'ChatArchiveTool',
                              'NSHighResolutionCapable': True,
-                             'LSUIElement': True})
+                             'LSUIElement': True,
+                             'CFBundleShortVersionString': (root / 'VERSION').read_text().strip().lstrip('v'),
+                             'CFBundleVersion': (root / 'VERSION').read_text().strip().lstrip('v')})

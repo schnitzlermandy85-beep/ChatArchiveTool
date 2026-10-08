@@ -35,7 +35,9 @@ python scripts/build_release.py --version v1.1.0
 
 ## 可选组件与签名
 
-桌面包包含核心分析和 HTTPS CA 证书。新语音识别引擎／模型不打包，界面禁用未安装的转写选项；需要新转写请用源码版安装 `requirements.txt`。Windows 微信组件保持按需安装，Apple 芯片 Mac 按需安装 wxvault；QQ 可安装并启动 QCE。Intel Mac 微信仍使用导入模式。组件安装目录 `components/`、真实账号配置、密钥及缓存不打包。微信 Mac 当前支持文字与可提取图片，其他媒体保留缺失占位；真实账号端到端验证需使用者在保持微信登录时完成读取授权。
+桌面包包含核心分析和 HTTPS CA 证书。新语音识别引擎／模型不打包；需要新转写请用源码版安装 `requirements.txt`。Windows 微信组件保持按需安装，Mac 微信改用原生 ZIP 分享扩展和导入，不再提供密码初始化。Apple 芯片 Mac 的 QQ 可安装并启动 QCE。组件、账号配置、密钥及缓存不打包。真实微信多选导出需用户自行验收。
+
+Mac 构建另外需要 Xcode Command Line Tools 中的 Swift 编译器。`build_wechat_share.py` 编译 `WeChatShare.appex`，先签嵌套扩展再重新签主 App；扩展仅有沙盒和用户选择文件读写权限，没有网络、应用组或微信进程读取权限。`VERSION` 同时驱动界面、Info.plist 和发行标签校验。
 
 当前 Mac 构建只有 PyInstaller 的本地 ad-hoc 签名，尚未使用 Apple Developer ID 正式签名或完成 Apple 公证；Windows exe 也没有发布者代码签名。`codesign --verify` 通过只说明签名和包完整性校验通过，不代表 Apple 已审核或公证，也不保证下载后不会被 Gatekeeper 拦截。
 

@@ -46,15 +46,11 @@ class ConnectionGuideTests(unittest.TestCase):
             desktop.cancel_wechat()
             self.assertEqual(desktop.connection_status()['code'], 'cancelling')
 
-    def test_initialize_uses_live_helper_and_rejects_duplicate_jobs(self):
-        with tempfile.TemporaryDirectory() as tmp, patch.object(desktop, 'tools_root', return_value=Path(tmp)), patch.object(desktop, 'mac_arm', return_value=True), patch.object(desktop, 'wxvault_binary', return_value=Path(__file__)), patch.object(desktop, 'open_terminal_script') as terminal:
-            desktop.initialize_wechat()
-            command = terminal.call_args.args[1]
-            self.assertIn('wechat_connect', command)
-            self.assertNotIn(' init', command)
-            with self.assertRaisesRegex(ValueError, '正在进行'):
+    def test_retired_initialize_never_opens_terminal(self):
+        with patch.object(desktop, 'open_terminal_script') as terminal:
+            with self.assertRaisesRegex(ValueError, '不再进行密码初始化'):
                 desktop.initialize_wechat()
-            self.assertEqual(terminal.call_count, 1)
+            terminal.assert_not_called()
 
     def test_setup_rejects_arbitrary_command_and_url(self):
         with patch.object(sys, 'platform', 'darwin'), patch.object(desktop.subprocess, 'run') as run:

@@ -18,7 +18,7 @@ class UpstreamIntegrationTests(unittest.TestCase):
     def test_protected_mac_target_is_rejected_before_terminal_or_password(self):
         blocked = {'blocked': True, 'title': '不支持直读', 'detail': '系统保护'}
         with patch.object(desktop, 'mac_arm', return_value=True), patch.object(desktop, 'inspect_wechat', return_value=blocked), patch.object(desktop, 'open_terminal_script') as terminal:
-            with self.assertRaisesRegex(ValueError, '不支持直读'): desktop.initialize_wechat()
+            with self.assertRaisesRegex(ValueError, '不再进行密码初始化'): desktop.initialize_wechat()
             terminal.assert_not_called()
 
     def test_readonly_entitlement_check_distinguishes_protected_and_debuggable(self):

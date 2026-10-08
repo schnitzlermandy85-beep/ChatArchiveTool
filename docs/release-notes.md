@@ -1,27 +1,20 @@
-本版修复与使用说明：
+## v0.1.4：Mac 微信改为原生 ZIP 导出
 
-- 纠正 Mac 微信支持范围：原版受保护微信不能用当前方案直读。在密码提示前检查系统和应用签名，避免反复授权；保留 wechat-chat-export 的 Windows 导出 → Mac 导入流程。
-- 对照 QQChatExporter v6.3.2 接入 `/health`，区分未扫码、仅查看模式、令牌失败；最近联系人补充接口失败不再挡住好友和群聊。新增打开 QQChatExporter 原版导出界面的入口。
-- 新增可搜索的应用内帮助，按 QQ、微信、权限、终端、API、保存与导入等主题提供步骤，适合第一次使用。
-- 导出与本地分析不需要 API；AI 分析由用户核对发送内容并授权。
+- 停用会触发密码授权的 Mac 微信初始化、进程读取入口。新版不再启动微信调试器。
+- Mac 包加入“导出聊天 ZIP · ChatArchiveTool”分享扩展：微信多选消息 → 合并转发到其他应用 → 保存 ZIP → 回本工具整合。需微信提供该功能（4.1.13 起）。
+- 支持原生 ZIP/TXT、媒体附件和 Dukou 批次 ZIP；保留原始 ZIP/TXT，缺失附件明确标注。
+- 界面显示真实版本号，增加无需终端的新手操作步骤。
+- Windows 微信和 QQ 路径保留。
 
-## 选择你的下载版本
+仅导出选中的消息，不代表全部历史。原生 TXT 没有账号 ID，时间只有分钟精度，语音可能只剩占位；该路径暂不自动转写，也暂不能直接用于要求身份确认的关系分析。真实微信的菜单与文件接收仍需用户在自己的客户端验证。
 
-在下方 **Assets** 选择带系统名称的 ZIP，无需另装 Python：
+| 电脑 | 下载文件后缀 |
+| --- | --- |
+| Windows x64 | Windows-x64.zip |
+| Mac M 系列 | macOS-AppleSilicon.zip |
+| Mac Intel | macOS-Intel.zip |
 
-| 电脑 | 文件名包含 | 打开方式 |
-| --- | --- | --- |
-| Windows 64 位 | `Windows-x64.zip` | 完整解压后打开 `ChatArchiveTool/ChatArchiveTool.exe` |
-| Mac，Apple 芯片（M 系列） | `macOS-AppleSilicon.zip` | 解压后将 `ChatArchiveTool.app` 拖到“应用程序”并打开 |
-| Mac，Intel 芯片 | `macOS-Intel.zip` | 解压后将 `ChatArchiveTool.app` 拖到“应用程序”并打开 |
-
-Mac 芯片类型见苹果菜单 →“关于本机”。`Source code` 是开发者源码包，不是免安装桌面版。每个 ZIP 附有 SHA-256 校验文件。
-
-支持导入聊天归档、本地关系分析、可选 AI API 和中文 HTML 报告。解压包中的 `examples/synthetic-chat` 可直接用于体验。点击界面电源按钮退出程序。
-
-Apple 芯片 Mac 新增 QQ 组件安装／启动和微信 wxvault 安装／连接入口。原版受保护的 Mac 微信当前不支持直读，Apple 芯片和 Intel Mac 均可导入已有微信文件。QQ 在用户本机的真实服务已验证在线且成功读取会话列表；尚未据此声称全部聊天和媒体完成导出验收。新语音转写需要源码版安装可选语音依赖；桌面包保留原始音频并复用已有转写。QQ 直连需先启动并登录 QQChatExporter。
-
-<a id="mac-open-anyway"></a>
+Mac 解压后把 App 拖入“应用程序”，退出旧版，从新位置打开，右上角应显示 v0.1.4。选择微信，点“启用微信转发入口”，再按界面步骤操作。旧版不会因下载新 ZIP 自动替换。
 
 ### Mac 提示“Apple 无法验证”怎么办？
 
