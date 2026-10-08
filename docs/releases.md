@@ -37,6 +37,10 @@ python scripts/build_release.py --version v1.1.0
 
 桌面包包含核心分析和 HTTPS CA 证书。新语音识别引擎／模型不打包，界面禁用未安装的转写选项；需要新转写请用源码版安装 `requirements.txt`。Windows 微信组件保持按需安装，Apple 芯片 Mac 按需安装 wxvault；QQ 可安装并启动 QCE。Intel Mac 微信仍使用导入模式。组件安装目录 `components/`、真实账号配置、密钥及缓存不打包。微信 Mac 当前支持文字与可提取图片，其他媒体保留缺失占位；真实账号端到端验证需使用者完成初始化与登录。
 
-当前 Mac 构建只有 PyInstaller 的本地 ad-hoc 签名，没有 Developer ID 公证；Windows exe 也没有发布者代码签名。若要提供已公证的 Mac 分发包，需要维护者自己的 Apple Developer ID 证书与公证凭据，再扩展 CI 签名流程。
+当前 Mac 构建只有 PyInstaller 的本地 ad-hoc 签名，尚未使用 Apple Developer ID 正式签名或完成 Apple 公证；Windows exe 也没有发布者代码签名。`codesign --verify` 通过只说明签名和包完整性校验通过，不代表 Apple 已审核或公证，也不保证下载后不会被 Gatekeeper 拦截。
+
+用户遇到“Apple 无法验证”时，按 [README 中的 Mac 首次打开步骤](../README.md#mac-open-anyway) 对该应用单独批准打开；发布说明模板也包含同样步骤。
+
+要消除这类未公证拦截，需要维护者提供 Apple Developer ID Application 签名证书及公证凭据，在 CI 中完成正式签名、提交 Apple 公证并附加公证票据后再分发。重新压缩 ZIP 或再次执行本地 ad-hoc 签名不能替代这一流程。参考 [Apple Developer ID 签名与公证说明](https://developer.apple.com/developer-id/)。
 
 参考：[PyInstaller 跨系统构建](https://pyinstaller.org/en/stable/usage.html)、[GitHub runner 架构](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。

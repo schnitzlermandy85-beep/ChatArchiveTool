@@ -59,7 +59,27 @@ Mac 可在苹果菜单 →“关于本机”查看芯片类型。下载带系统
 
 桌面包包含 Python 运行环境，使用浏览器显示界面。首次启动后选择“关系分析”，载入下载包中的 `examples/synthetic-chat`，确认身份并生成本地报告。示例不含真实个人数据；也可以打开 `examples/sample-report.html` 查看报告效果。退出时点击界面的电源按钮，关闭浏览器标签不会停止后台服务。
 
-Mac 应用暂未使用 Apple Developer ID 签名或公证。如果 macOS 阻止打开，在确认下载来源后，可通过“系统设置 → 隐私与安全性 → 仍要打开”批准这一个应用。
+<a id="mac-open-anyway"></a>
+
+### Mac 提示“Apple 无法验证”怎么办？
+
+首次打开时，可能看到：
+
+> Apple 无法验证“ChatArchiveTool”是否包含可能危害 Mac 安全或泄漏隐私的恶意软件。
+
+当前 Mac 版本只有本地 ad-hoc 签名，尚未使用 Apple Developer ID 正式签名，也未完成 Apple 公证，因此 macOS 会拦截首次打开。这个提示本身不能判断应用是否包含恶意软件。
+
+确认安装包来自 [本仓库的 Releases](https://github.com/schnitzlermandy85-beep/ChatArchiveTool/releases)，且未被修改后，可按以下步骤打开：
+
+1. 解压 ZIP，将 `ChatArchiveTool.app` 拖到“应用程序”文件夹，再双击一次。
+2. 出现上述提示时，点击“完成”或关闭弹窗。
+3. 打开 **苹果菜单 → 系统设置 → 隐私与安全性**，向下滚动到“安全性”区域。
+4. 找到 ChatArchiveTool 被阻止打开的提示，点击 **“仍要打开”**。
+5. 按系统提示使用 Touch ID 或输入 Mac 登录密码，再点击 **“打开”**。
+
+此操作会为这个应用添加打开例外，之后通常可以直接双击启动。如果找不到“仍要打开”，先再次尝试打开应用，再回到“隐私与安全性”查看；由单位或学校管理的 Mac 可能需要联系管理员。
+
+操作依据：[Apple 官方说明：在 Mac 上安全地打开 App](https://support.apple.com/zh-cn/102445)。
 
 ### 源码启动
 
