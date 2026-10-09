@@ -3,6 +3,7 @@ import datetime
 import os
 import pathlib
 import struct
+import signal
 import sys
 import traceback
 from platform_support import data_root
@@ -35,6 +36,12 @@ class StartupStream:
 
 
 def main():
+    # AppKit/CI launch contexts may inherit an ignored or blocked SIGINT.
+    # The native menu uses this signal to request graceful export cancellation.
+    if os.environ.get('CHATARCHIVE_LAUNCH_READY'):
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+        if hasattr(signal, 'pthread_sigmask'):
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     if sys.version_info[:2] < (3, 10):
         print('ChatArchive requires Python 3.10 or newer; use Python 3.12 x64 for bundled voice/WeChat components.')
         return 1

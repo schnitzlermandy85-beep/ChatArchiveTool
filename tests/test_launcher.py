@@ -3,6 +3,7 @@ import os
 import pathlib
 import re
 import subprocess
+import signal
 import sys
 import time
 import unittest
@@ -83,6 +84,27 @@ class LauncherTests(unittest.TestCase):
                 web_app.run(open_browser=False)
             self.assertFalse(ready.exists())
             server.server_close.assert_called_once()
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX inherited signal disposition')
+    def test_native_worker_handles_inherited_ignored_and_blocked_interrupt(self):
+        with test_directory() as root:
+            ready=pathlib.Path(root)/'ready.json'
+            script="import os,signal,sys; signal.signal(signal.SIGINT,signal.SIG_IGN); signal.pthread_sigmask(signal.SIG_BLOCK,{signal.SIGINT}); os.execv(sys.executable,[sys.executable,sys.argv[1],'--no-browser'])"
+            process=subprocess.Popen([sys.executable,'-c',script,str(pathlib.Path(app.__file__).resolve())],
+                env={**os.environ,'CHATARCHIVE_DATA_DIR':str(root),'CHATARCHIVE_LAUNCH_READY':str(ready)},
+                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            try:
+                deadline=time.monotonic()+15
+                while not ready.exists():
+                    if process.poll() is not None or time.monotonic()>deadline:
+                        self.fail('Native-managed backend failed to become ready')
+                    time.sleep(.05)
+                process.send_signal(signal.SIGINT)
+                self.assertEqual(process.wait(timeout=5),0)
+                self.assertFalse(ready.exists())
+            finally:
+                if process.poll() is None:
+                    process.kill();process.wait(timeout=5)
 
     @unittest.skipUnless(os.name=='nt','Windows batch launcher')
     def test_actual_batch_check_and_running_server(self):
