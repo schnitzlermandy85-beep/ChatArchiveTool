@@ -2,3 +2,9 @@ PyInstaller==6.22.3
 packaging==26.3
 certifi==2026.7.22
 zstandard>=0.23,<1
+
+# Mac WeChat reader: self-contained native wheels, no user terminal installation.
+sqlcipher3==0.6.2; sys_platform == 'darwin'
+pycryptodome==3.23.0; sys_platform == 'darwin'
+av==16.0.1; sys_platform == 'darwin'
+silk-python==0.2.8; sys_platform == 'darwin'

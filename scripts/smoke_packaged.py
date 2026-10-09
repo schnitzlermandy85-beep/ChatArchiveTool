@@ -56,11 +56,11 @@ def main():
             assert config['appVersion'] == (Path(__file__).resolve().parents[1] / 'VERSION').read_text().strip()
             if sys.platform == 'darwin':
                 assert config['wechatNative'] and config['wechatShareBundled']
-                assert not config['wechatSupported'] and not config['wechatReady']
+                assert config['wechatSupported'] and not config['wechatReady']
             if sys.platform == 'darwin':
-                assert config['wechatSupported'] is False
+                assert config['wechatSupported'] is True
                 assert config['wechatMac'] is True
-                assert config['wechatInstalled'] is False
+                assert config['wechatInstalled'] is True
                 assert config['qceInstalled'] is False
             assert 'id="help-view"' in page and 'id="help-search"' in page
             assert '会暂时退出微信' not in page

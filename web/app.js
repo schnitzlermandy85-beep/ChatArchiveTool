@@ -25,17 +25,17 @@ function renderSessions(){
  $('session-total').textContent=items.length+' 个会话';
 }
 function updatePlatform(){
- if(platform==='WeChat'&&(!wechatSupported||wechatMac)&&mode==='direct'){mode='import';updateMode();}
+ if(platform==='WeChat'&&!wechatSupported&&mode==='direct'){mode='import';updateMode();}
  document.querySelectorAll('[data-platform]').forEach(button=>{const active=button.dataset.platform===platform;button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));});
- $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac;
+ $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac||mode!=='import';
  $('source-badge').textContent=platform==='QQ'?'QQ':'微信';$('source-badge').classList.toggle('wechat-badge',platform==='WeChat');
  $('qq-fields').hidden=platform!=='QQ';$('wechat-fields').hidden=platform!=='WeChat';$('qq-advanced').hidden=platform!=='QQ';$('wechat-advanced').hidden=platform!=='WeChat';$('media-field').hidden=platform!=='QQ';
- $('import-hint').textContent=platform==='QQ'?'消息文件与媒体 ZIP 需来自同一会话、同一日期范围。':'Mac 微信可选择刚保存的原生 ZIP（推荐）或聊天记录.txt；也支持 wechat-chat-export 的 chat_full_parsed.json 与文件夹。';
+ $('import-hint').textContent=platform==='QQ'?'消息文件与媒体 ZIP 需来自同一会话、同一日期范围。':'Mac 微信可导入已有原生 ZIP 或聊天记录.txt；也支持 wechat-chat-export 的 chat_full_parsed.json 与文件夹。';
  refreshReadiness();closeMenu();
 }
 function updateMode(){
  document.querySelectorAll('[data-mode]').forEach(button=>{const active=button.dataset.mode===mode;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
- $('direct-fields').hidden=mode!=='direct';$('import-fields').hidden=mode!=='import';document.querySelector('.source-card>.advanced').hidden=mode!=='direct';refreshReadiness();closeMenu();
+ $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac||mode!=='import';$('direct-fields').hidden=mode!=='direct';$('import-fields').hidden=mode!=='import';document.querySelector('.source-card>.advanced').hidden=mode!=='direct';refreshReadiness();closeMenu();
 }
 function ready(){
  if(!$('output').value.trim())return false;
@@ -51,15 +51,16 @@ function refreshReadiness(){
  document.querySelectorAll('[data-component]').forEach(b=>b.disabled=busy);
  $('install-qq').disabled=busy||state.qceInstallSupported===false;
  $('start-qq').disabled=busy||!state.qceInstalled;
- $('init-wechat').disabled=wechatMac||busy||!state.wechatInstalled||!!state.wechatConnection?.active||!!state.wechatPreflight?.blocked;
- $('install-wechat-mac').disabled=wechatMac||busy||!!state.wechatPreflight?.blocked;
- $('check-wechat').disabled=wechatMac||busy||!state.wechatInstalled||!!state.wechatConnection?.active;
- document.querySelector('[data-mode="direct"]').disabled=busy||(platform==='WeChat'&&(!wechatSupported||wechatMac));
+ $('init-wechat').disabled=busy||!state.wechatInstalled||!$('wechat-consent').checked;
+ $('install-wechat-mac').disabled=busy||!state.wechatInstalled||!$('wechat-consent').checked;
+ $('restore-wechat').disabled=busy||!$('wechat-consent').checked;
+ $('check-wechat').disabled=busy||!state.wechatReady;
+ document.querySelector('[data-mode="direct"]').disabled=busy||(platform==='WeChat'&&!wechatSupported);
  $('enable-wechat-share').disabled=busy;
  $('transcribe').disabled=busy||!voiceAvailable;
  document.querySelectorAll('[data-help],#wechat-step-help').forEach(b=>b.disabled=false);
  $('connect').disabled=busy;$('connect').classList.toggle('spinning',busy&&state.operation==='connect');$('connect').querySelector('span').textContent=busy&&state.operation==='connect'?'连接中':sessionItems.length?'刷新':'准备并连接 QQ';$('session-button').disabled=busy||!sessionItems.length;
- $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?(platform==='WeChat'?'选择一个聊天 ZIP 即可开始':'选择消息文件与媒体后即可开始'):platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':(wechatMac?(state.wechatPreflight?.blocked?'当前微信不支持此直读方式，请查看提示或导入已有文件':'先准备组件，再连接已登录微信'):'在来源设置中安装微信组件');
+ $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?(platform==='WeChat'?'选择一个聊天 ZIP 即可开始':'选择消息文件与媒体后即可开始'):platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':(wechatMac?('按步骤准备读取、登录微信，再连接并检查'):'在来源设置中安装微信组件');
  refreshAnalysisReadiness();
 }
 function renderLogs(logs){
@@ -73,10 +74,10 @@ function renderComponents(data){
  if(data.wechatMac!==undefined)wechatMac=!!data.wechatMac;
  if(data.wechatSupported!==undefined)wechatSupported=!!data.wechatSupported;
  $('app-version').textContent=data.appVersion||'dev';
- $('wechat-mac-setup').hidden=true;
- $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac;
+ $('wechat-mac-setup').hidden=!wechatMac;
+ $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac||mode!=='import';
  renderWechatStep(data.wechatPreflight?.blocked&&!data.wechatReady?data.wechatPreflight:(data.wechatConnection||{}));
- $('wechat-import-route').hidden=!data.wechatPreflight?.blocked;
+ $('wechat-import-route').hidden=!wechatMac;
  $('wechat-experimental-note').hidden=!!data.wechatPreflight?.blocked;
  document.querySelectorAll('.mac-only').forEach(el=>el.hidden=!wechatMac);
  $('qq-component-status').textContent=data.qceInstalled?'QQ 导出组件已安装':'尚未安装内置 QQ 导出组件；也可连接已有本机服务';
@@ -102,7 +103,7 @@ function renderState(data){
  $('after-export-analysis').hidden=!data.result||data.summary?.analysisEligible===false;$('analyze-export').disabled=workspaceBusy();
  renderAnalysisState(data);renderLogs(data.logs||[]);refreshReadiness();
 }
-function payload(){return {platform,mode,session:selectedSession,address:$('address').value,token:$('token').value,keyword:$('keyword').value,dbDir:$('db-dir').value,source:$('source').value,media:$('media').value,begin:mode==='import'?'':$('begin').value,end:mode==='import'?'':$('end').value,output:$('output').value,model:$('model').value,roaming:$('roaming').checked,transcribe:$('transcribe').checked};}
+function payload(){return {platform,mode,session:selectedSession,address:$('address').value,token:$('token').value,keyword:$('keyword').value,dbDir:$('db-dir').value,source:$('source').value,media:$('media').value,begin:mode==='import'?'':$('begin').value,end:mode==='import'?'':$('end').value,output:$('output').value,model:$('model').value,roaming:$('roaming').checked,transcribe:$('transcribe').checked,allowResign:$('wechat-consent').checked};}
 async function action(name,body={}){try{await api(name,body);renderState(await api('state'));return true;}catch(e){toast(e.message);return false;}}
 function openArchive(){if(state.result)window.open('/archive/index.html','_blank','noopener');}
 function showLogs(){if(!$('logs-dialog').open)$('logs-dialog').showModal();$('log-list').scrollTop=$('log-list').scrollHeight;}
@@ -129,7 +130,7 @@ function openHelp(topic='start'){
 function renderWechatStep(step){
  const signature=JSON.stringify(step);if(signature===lastWechatStep)return;lastWechatStep=signature;
  $('wechat-step-title').textContent=step.title||'先准备组件，再连接微信';
- $('wechat-step-detail').textContent=step.detail||'保持日常使用的微信登录。首次连接需要在终端完成系统授权。';
+ $('wechat-step-detail').textContent=step.detail||'保持日常使用的微信登录。首次连接使用 macOS 系统授权弹窗。';
  $('cancel-wechat').hidden=!step.active;$('cancel-wechat').disabled=step.code==='cancelling';
  $('wechat-next-actions').replaceChildren();
  const actions={disk_permission:[['full-disk-access','打开完全磁盘访问']],tools_missing:[['install-tools','安装系统工具']],wechat_not_running:[['open-wechat','打开微信']],password:[['show-terminal','显示终端']],terminal_pending:[['show-terminal','显示终端']],cancelling:[['show-terminal','显示终端']]};
@@ -268,3 +269,5 @@ $('help-to-analysis').addEventListener('click',()=>showView('analysis'));
 $('qce-upstream-ui').addEventListener('click',()=>action('qce-ui',{address:$('address').value.trim(),token:$('token').value.trim()}));
 
 $('enable-wechat-share').addEventListener('click',async()=>{const button=$('enable-wechat-share');button.disabled=true;try{const result=await api('wechat-share',{});$('wechat-share-status').textContent=result.message;}catch(e){$('wechat-share-status').textContent=e.message;}finally{button.disabled=false;}});
+
+$('wechat-consent').addEventListener('change',refreshReadiness);

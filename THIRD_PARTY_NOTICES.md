@@ -21,3 +21,8 @@
 ## 微信原生 ZIP 分享
 
 - 原生文件格式、媒体标记、`NSItemProvider` 生命周期和分享入口打包方式参考 [qzz0518/Dukou](https://github.com/qzz0518/Dukou)，固定研究提交 `28f38d7ebb0f107d7bc8cc6ef367753c44250bef`，MIT 许可见 `vendor/licenses/Dukou-LICENSE`。本项目以 Python 实现解析，独立 Swift 扩展通过用户选择的保存位置写入 ZIP；不依赖 Dukou 二进制、其应用组或自动化功能。
+
+## Mac 微信读取与媒体解析（v0.1.5）
+- qwe11223/wechat-exporter-mac，MIT，提交 231884e745d03206629dafbc6e13339269dc96c3。引入 constants/models/image_dat/message_parser；修改记录见 vendor/wechat_mac/UPSTREAM.txt。许可：vendor/licenses/wechat-exporter-mac-LICENSE。
+- 数据库采用 sqlcipher3 0.6.2 / SQLCipher；图片使用 PyCryptodome、PyAV / FFmpeg 与 Pillow；语音使用 silk-python。构建产物 licenses 目录保留各 wheel 的许可及第三方声明。
+- 自有适配修正分片完整性、数据库 WAL、媒体唯一关联、图形授权及备份恢复。未采用上游按时间顺序配图的逻辑。

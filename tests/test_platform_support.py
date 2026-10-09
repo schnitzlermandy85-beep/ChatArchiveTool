@@ -69,7 +69,7 @@ class PlatformSupportTests(unittest.TestCase):
     def test_mac_rejects_windows_install_and_direct_export_before_side_effects(self):
         with patch.object(sys, 'platform', 'darwin'), patch('platform.machine', return_value='x86_64'):
             controller = web_app.Controller()
-            self.assertFalse(controller.state['wechatSupported'])
+            self.assertTrue(controller.state['wechatSupported'])
             self.assertFalse(controller.state['wechatReady'])
             with self.assertRaises(ValueError):
                 controller.install()

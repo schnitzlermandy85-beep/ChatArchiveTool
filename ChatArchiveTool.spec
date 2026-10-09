@@ -3,14 +3,15 @@ import sys
 from pathlib import Path
 
 root = Path(SPECPATH)
+mac_binaries = [(str(root / 'build/native/wechat_keys'), 'native')] if sys.platform == 'darwin' else []
 datas = [(str(root / name), name) for name in ('web', 'vendor')]
 datas += [(str(root / name), '.') for name in ('viewer.html', 'THIRD_PARTY_NOTICES.md', 'VERSION')]
 a = Analysis(
     ['app.py'],
     pathex=[str(root / 'vendor/wechat_export')],
-    binaries=[], datas=datas,
+    binaries=mac_binaries, datas=datas,
     hiddenimports=['packaging', 'packaging.tags', 'packaging.requirements',
-                   'packaging.utils', 'packaging.version', 'exporter_core'],
+                   'packaging.utils', 'packaging.version', 'exporter_core'] + (['sqlcipher3', 'sqlcipher3.dbapi2', 'Crypto.Cipher.AES', 'av', 'pysilk'] if sys.platform == 'darwin' else []),
     hookspath=[], hooksconfig={}, runtime_hooks=[],
     excludes=['faster_whisper', 'numpy', 'pip', 'setuptools'] + (['tkinter'] if sys.platform == 'darwin' else []),
     noarchive=False,

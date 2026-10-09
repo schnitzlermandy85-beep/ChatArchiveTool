@@ -13,7 +13,7 @@ def runtime_path():
 def export_wechat(keyword,dest,db_dir='',log=print,stop=None,filters=None):
  require_wechat_support()
  if sys.platform == 'darwin':
-  from mac_wechat import export_wechat_mac
+  from mac_wechat_export import export_wechat_mac
   return export_wechat_mac(keyword,dest,db_dir,log,stop,filters)
  stop=stop or threading.Event();dest=pathlib.Path(dest).resolve();dest.mkdir(parents=True,exist_ok=True)
  if not keyword.strip():raise ValueError('请输入微信好友准确备注、昵称、wxid或群名')
@@ -82,10 +82,13 @@ def bundle_wechat(source,dest,model='',transcribe=True,log=print,stop=None,filte
    if media.get('path'):
     candidate=safe_child(source.parent,str(media['path']))
     if candidate.is_file():
-     digest=hashlib.sha256(candidate.read_bytes()).hexdigest();out=safe_child(dest,'resources/'+kind+'/'+digest+candidate.suffix.lower());out.parent.mkdir(parents=True,exist_ok=True)
+     hasher=hashlib.sha256()
+     with candidate.open('rb') as stream:
+      for chunk in iter(lambda:stream.read(1024*1024),b''):hasher.update(chunk)
+     digest=hasher.hexdigest();out=safe_child(dest,'resources/'+kind+'/'+digest+candidate.suffix.lower());out.parent.mkdir(parents=True,exist_ok=True)
      if candidate!=out:shutil.copyfile(candidate,out)
      path=out
-   item={'type':kind,'filename':name or '['+kind+']','available':bool(path),'path':path.relative_to(dest).as_posix() if path else None,'md5':media.get('md5'),'duration':media.get('duration'),'reason':media.get('reason')}
+   item={'type':kind,'filename':name or '['+kind+']','available':bool(path),'path':path.relative_to(dest).as_posix() if path else None,'md5':media.get('md5'),'duration':media.get('duration'),'reason':media.get('reason'),'quality':media.get('quality')}
    stats[kind]+=1
    if not path:stats['missing_'+kind]+=1
    if kind=='audio':
@@ -112,5 +115,9 @@ def bundle_wechat(source,dest,model='',transcribe=True,log=print,stop=None,filte
  records.sort(key=lambda m:m['timestamp'])
  metadata={'chatInfo':{'name':meta.get('chat_name'),'type':meta.get('chat_type')}}
  result=save_archive(records,attachments,metadata,dest,dict(stats),dict(voices),platform='WeChat',exporter='wechat-chat-export',log=log)
+ result['historyCompleteness']=meta.get('historyCompleteness','source_defined')
+ result['exporter']=meta.get('exporter_version') or result.get('exporter','wechat-chat-export')
+ thumbs=sum(1 for a in attachments if a.get('quality')=='thumbnail')
+ if thumbs:result['warnings']=[f'{thumbs} 张图片仅保存了本机缩略图，原图不可用']
  result['senderResolutionCounts']=dict(Counter(m['sender']['resolutionStatus'] or 'unknown' for m in records));result['filter']=filters
  write_json(dest/'manifest.json',result);return result

@@ -62,11 +62,15 @@ def wxvault_configured():
 
 
 def status():
-    return {'desktopOS': sys.platform, 'qceInstallSupported': qce_supported(),
+    result = {'desktopOS': sys.platform, 'qceInstallSupported': qce_supported(),
             'qceInstalled': qce_launcher() is not None,
             'wechatMac': sys.platform == 'darwin', 'wechatMacSupported': False,
             'wechatInstalled': False, 'wechatConfigured': False,
             'wechatConnection': {}, 'wechatPreflight': {}}
+    if sys.platform == 'darwin':
+        from mac_wechat_setup import capability
+        result.update(capability())
+    return result
 
 
 def check_stop(stop):
@@ -306,9 +310,7 @@ def diagnostics():
           'title': 'QQ 导出服务已启动' if qq_open else 'QQ 组件已安装，服务还没有启动' if info['qceInstalled'] else '尚未安装 QQ 导出组件',
           'detail': '点击连接 QQ 读取会话；如果提示未登录，请完成扫码。' if qq_open else '点击“准备并连接 QQ”，按界面提示完成安装和启动。普通 QQ 登录不会自动开启导出服务。',
           'topic': 'qq'}
-    from native_share import MAC_ROUTE
-    wx = {'code': 'native_zip', 'title': 'Mac 微信使用原生 ZIP 导出',
-          'detail': MAC_ROUTE, 'topic': 'wechat', 'active': False}
+    wx = info.get('wechatConnection') or {'code': 'setup', 'title': '请安装微信组件', 'detail': '保持 Windows 微信登录，再安装读取组件。', 'topic': 'wechat'}
     return {'qq': qq, 'wechat': wx}
 
 

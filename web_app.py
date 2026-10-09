@@ -34,7 +34,7 @@ class Controller:
   self.analysis_last=None;self.analysis_preview=None
   self.state={'busy':False,'operation':None,'status':'ready','stage':'准备好后，开始创建你的聊天档案。','progress':None,'messageCount':None,'voiceCount':None,'result':False,'summary':None,'connection':'未连接','wechatSupported':wechat_supported(),'wechatReady':wechat_supported() and (runtime_path()/'wechatauto').exists()}
   self.state.update(desktop_exporters.status(),**native_share.share_status())
-  if sys.platform=='darwin':self.state['wechatReady']=False
+  if sys.platform=='darwin':self.state['wechatReady']=desktop_exporters.status().get('wechatReady',False)
   self.state.update(analysisArchive='',analysisResult=False,analysisReportUrl='',analysisSummary=None)
   security=pathlib.Path.home()/'.qq-chat-exporter/security.json'
   if security.exists():
@@ -43,7 +43,7 @@ class Controller:
  def snapshot(self):
   with self.lock:
    self.state.update(desktop_exporters.status(),**native_share.share_status())
-   if sys.platform=='darwin':self.state['wechatReady']=False
+   if sys.platform=='darwin':self.state['wechatReady']=desktop_exporters.status().get('wechatReady',False)
   with self.lock:return {**self.state,'logs':list(self.logs),'sessions':[{'index':i,'name':str(c.get('remark') or c.get('name') or c.get('peerName') or c['peerUid']),'kind':'群聊' if int(c['chatType'])==2 else '私聊'} for i,c in enumerate(self.sessions)]}
  def log(self,message):
   with self.lock:
@@ -191,7 +191,18 @@ class Controller:
    with self.lock:self.state.update(wechatReady=True,status='installed',stage='微信组件已就绪，可以开始导出。',progress=100)
   self.launch('install',job)
  def component_action(self,action,payload=None):
-  if sys.platform=='darwin' and action in ('install-wechat','init-wechat','check-wechat'):raise ValueError(native_share.MAC_ROUTE)
+  if sys.platform=='darwin' and action in ('install-wechat','init-wechat','check-wechat','restore-wechat'):
+   import mac_wechat_setup
+   params=payload or {}
+   if action in ('install-wechat','restore-wechat','init-wechat') and params.get('allowResign') is not True:raise ValueError('请先勾选了解微信签名修改与重新登录，再继续')
+   def mac_job():
+    if action=='install-wechat':mac_wechat_setup.prepare(params.get('allowResign'),self.log,self.stop)
+    elif action=='init-wechat':mac_wechat_setup.connect(str(params.get('dbDir') or ''),self.log,self.stop)
+    elif action=='restore-wechat':mac_wechat_setup.restore(params.get('allowResign'),self.log)
+    else:mac_wechat_setup.check(self.log,self.stop)
+    with self.lock:self.state.update(status='ready',progress=None)
+   self.launch('component',mac_job)
+   return
   if action not in ('install-qq','start-qq','prepare-qq','install-wechat','init-wechat','check-wechat'):raise ValueError('未知组件操作')
   def job():
    if action=='prepare-qq':

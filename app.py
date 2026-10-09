@@ -65,6 +65,9 @@ def main():
             sys.path.insert(0, str(site))
         from web_app import make_server, run
         if '--check' in sys.argv:
+            if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
+                from mac_wechat_setup import self_check
+                self_check()
             server = make_server()
             server.server_close()
             print('Startup check passed: imports, web assets and local HTTP binding.', flush=True)

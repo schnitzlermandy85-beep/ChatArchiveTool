@@ -1,0 +1,4 @@
+Source: https://github.com/qwe11223/wechat-exporter-mac
+Commit: 231884e745d03206629dafbc6e13339269dc96c3
+License: MIT; ../licenses/wechat-exporter-mac-LICENSE
+Adaptations: removed heuristic image pairing and unverified UIN fallback; bounded DAT framing; preserve text whitespace. The application implements its own strict shard/WAL reader, scoped media association and user-mediated setup.

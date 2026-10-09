@@ -108,8 +108,8 @@ class NativeWeChatTests(unittest.TestCase):
         import app
         with patch.object(sys, 'platform', 'darwin'), patch('desktop_exporters.initialize_wechat') as initialize:
             controller = web_app.Controller()
-            for action in ('install-wechat', 'init-wechat', 'check-wechat'):
-                with self.assertRaisesRegex(ValueError, '不再进行密码初始化'): controller.component_action(action)
+            for action in ('install-wechat', 'init-wechat', 'restore-wechat'):
+                with self.assertRaisesRegex(ValueError, '勾选'): controller.component_action(action)
             with patch.object(sys, 'argv', ['app', '--helper', 'wechat_connect', 'nonexistent.json']), patch('wechat_connect.run') as reader:
                 self.assertEqual(app.entrypoint(), 2)
                 reader.assert_not_called()
