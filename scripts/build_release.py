@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', default='dev')
+    parser.add_argument('--skip-native-launcher-check', action='store_true',
+                        help='Only for restricted shells without a macOS GUI session; validate native launch separately')
     args = parser.parse_args()
     if not args.version or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_' for c in args.version):
         parser.error('Version may only contain ASCII letters, digits, dots, underscores and hyphens')
@@ -39,6 +41,8 @@ def main():
                     str(ROOT / 'ChatArchiveTool.spec')], cwd=ROOT, check=True,
                    env={**os.environ, 'PYINSTALLER_CONFIG_DIR': str(ROOT / 'build/cache')})
     if sys.platform == 'darwin':
+        from build_mac_launcher import build as build_launcher
+        build_launcher(ROOT / 'dist/ChatArchiveTool.app')
         from build_wechat_share import build
         build(ROOT / 'dist/ChatArchiveTool.app', expected_version)
     name = f'ChatArchiveTool-{args.version}-{target}'
@@ -72,7 +76,8 @@ def main():
         raise RuntimeError('Python runtime LICENSE not found; do not distribute without its notice')
     shutil.copy2(python_license, stage / 'licenses/Python-LICENSE.txt')
     # Exercise the actual packaged server and analysis engine before publishing.
-    subprocess.run([sys.executable, str(ROOT / 'scripts/smoke_packaged.py'), str(executable)], check=True)
+    subprocess.run([sys.executable, str(ROOT / 'scripts/smoke_packaged.py'), str(executable)] +
+                   (['--skip-native-launcher-check'] if args.skip_native_launcher_check else []), check=True)
     release_dir = ROOT / 'dist/release'
     release_dir.mkdir(parents=True, exist_ok=True)
     archive = release_dir / (name + '.zip')

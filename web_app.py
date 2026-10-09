@@ -395,11 +395,19 @@ def run(open_browser=True):
  try:
   # URL associations can block while opening a browser. The local server must
   # still become available for the manual URL/HTML entry in that case.
+  ready_path=os.environ.get('CHATARCHIVE_LAUNCH_READY')
+  if ready_path:
+   ready=pathlib.Path(ready_path);temporary=ready.with_suffix('.tmp')
+   temporary.write_text(json.dumps({'url':url,'pid':os.getpid()}),encoding='utf-8')
+   temporary.replace(ready)
   if open_browser:threading.Thread(target=launch_browser,daemon=True).start()
   server.serve_forever(poll_interval=.2)
  except KeyboardInterrupt:
   server.controller.stop.set()
   while server.controller.snapshot()['busy']:time.sleep(.2)
- finally:server.server_close()
+ finally:
+  server.server_close()
+  if os.environ.get('CHATARCHIVE_LAUNCH_READY'):
+   pathlib.Path(os.environ['CHATARCHIVE_LAUNCH_READY']).unlink(missing_ok=True)
 
 if __name__=='__main__':run()

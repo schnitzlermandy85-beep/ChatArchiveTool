@@ -14,6 +14,9 @@ import urllib.request
 
 def main():
     executable = str(Path(sys.argv[1]).resolve())
+    if sys.platform == 'darwin' and '--skip-native-launcher-check' not in sys.argv:
+        from smoke_mac_launcher import check
+        check(executable)
     with tempfile.TemporaryDirectory(prefix='chatarchive-package-') as temp:
         root = Path(temp).resolve()
         env = {**os.environ, 'CHATARCHIVE_DATA_DIR': str(root / 'data')}

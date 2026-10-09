@@ -31,7 +31,9 @@ python scripts/build_release.py --version v1.1.0
 
 打包后的资源与用户数据分离：Mac 数据目录为 `~/Library/Application Support/ChatArchiveTool`；Windows 为 `%LOCALAPPDATA%/ChatArchiveTool`。`CHATARCHIVE_DATA_DIR` 可覆盖数据目录，冒烟测试使用独立临时目录。报告继续写入用户选定的输入档案旁。
 
-应用使用本机浏览器显示界面。关闭标签页不会退出服务，请点击界面的电源按钮。
+应用使用本机浏览器显示界面。Mac v0.1.6 的原生 AppKit 启动层负责重新打开和退出：关闭标签页后再次双击 App 会重开界面；可用菜单栏“聊天档案”打开或退出。页面退出会同时结束原生 App，菜单栏退出会等待后台清理。
+
+Mac 构建额外编译 `native/mac_launcher.swift`，将原 PyInstaller 主程序作为 `ChatArchiveToolBackend` 单独重新签名，再签主 App。打包测试默认执行原生生命周期验证；受限且没有图形会话的本地命令环境可显式使用 `--skip-native-launcher-check`，但必须另行验证桌面启动，发布 CI 不跳过。
 
 ## 可选组件与签名
 

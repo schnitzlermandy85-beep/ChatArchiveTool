@@ -70,6 +70,20 @@ class LauncherTests(unittest.TestCase):
                 self.assertTrue(browser_finished.wait(1))
         server.server_close.assert_called_once()
 
+    def test_native_ready_file_is_fresh_and_removed_on_exit(self):
+        with test_directory() as root:
+            ready=pathlib.Path(root)/'ready.json'
+            ready.write_text('{"url":"http://127.0.0.1:1/","pid":1}')
+            server=Mock();server.server_port=5555
+            def serve(**kwargs):
+                self.assertEqual(json.loads(ready.read_text()),
+                                 {'url':'http://127.0.0.1:5555/','pid':os.getpid()})
+            server.serve_forever.side_effect=serve
+            with patch.dict(os.environ,{'CHATARCHIVE_LAUNCH_READY':str(ready)}),patch.object(web_app,'ROOT',pathlib.Path(root)),patch('web_app.make_server',return_value=server):
+                web_app.run(open_browser=False)
+            self.assertFalse(ready.exists())
+            server.server_close.assert_called_once()
+
     @unittest.skipUnless(os.name=='nt','Windows batch launcher')
     def test_actual_batch_check_and_running_server(self):
         root=pathlib.Path(__file__).resolve().parents[1]
