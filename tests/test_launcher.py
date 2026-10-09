@@ -75,10 +75,10 @@ class LauncherTests(unittest.TestCase):
         with test_directory() as root:
             ready=pathlib.Path(root)/'ready.json'
             ready.write_text('{"url":"http://127.0.0.1:1/","pid":1}')
-            server=Mock();server.server_port=5555
+            server=Mock();server.server_port=5555;server.auth="private-test-token"
             def serve(**kwargs):
                 self.assertEqual(json.loads(ready.read_text()),
-                                 {'url':'http://127.0.0.1:5555/','pid':os.getpid()})
+                                 {'url':'http://127.0.0.1:5555/','pid':os.getpid(),'token':'private-test-token'})
             server.serve_forever.side_effect=serve
             with patch.dict(os.environ,{'CHATARCHIVE_LAUNCH_READY':str(ready)}),patch.object(web_app,'ROOT',pathlib.Path(root)),patch('web_app.make_server',return_value=server):
                 web_app.run(open_browser=False)

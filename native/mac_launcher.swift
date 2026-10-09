@@ -11,6 +11,7 @@ final class Launcher: NSObject, NSApplicationDelegate {
     var timer: Timer?
     var status: NSStatusItem?
     var currentURL: URL?
+    var shutdownToken: String?
     var stopping = false
     var opens = 0
     var started = Date()
@@ -78,6 +79,7 @@ final class Launcher: NSObject, NSApplicationDelegate {
            value["pid"] as? Int32 == process?.processIdentifier {
             timer?.invalidate(); timer = nil
             currentURL = url
+            shutdownToken = value["token"] as? String
             showWindow()
             if testMode {
                 // Exercise the same delegate callback Finder/Dock uses, without opening browser tabs.
@@ -103,24 +105,47 @@ final class Launcher: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func quitApp() { NSApp.terminate(nil) }
+    @objc func quitApp() {
+        if testMode { fputs("launcher: menu quit requested\n", stderr) }
+        NSApp.terminate(nil)
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let child = process, child.isRunning else { return .terminateNow }
         if !stopping {
             stopping = true
             status?.button?.title = "正在退出…"
-            child.interrupt() // Python waits for export cancellation and temporary-file cleanup.
+            if let url = currentURL, let token = shutdownToken {
+                // Use the same authenticated graceful stop as the in-page button.
+                var request = URLRequest(url: url.appendingPathComponent("api/shutdown"))
+                request.httpMethod = "POST"; request.httpBody = Data("{}".utf8)
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue(token, forHTTPHeaderField: "X-Archive-Token")
+                request.timeoutInterval = 10
+                URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+                    if error != nil || (response as? HTTPURLResponse)?.statusCode != 200 {
+                        DispatchQueue.main.async {
+                            guard let self = self, self.process?.isRunning == true else { return }
+                            self.stopping = false; self.status?.button?.title = "聊天档案"
+                            self.report("退出请求未完成", "请打开聊天档案页面，点击“退出工具”后重试。")
+                        }
+                    }
+                }.resume()
+            } else {
+                child.interrupt() // Startup has not exposed an HTTP endpoint yet.
+            }
         }
-        return .terminateLater
+        // Keep the normal AppKit run loop alive until the child exits. A delayed
+        // termination loop can prevent main-queue callbacks on older macOS.
+        return .terminateCancel
     }
 
     func finished(_ code: Int32) {
+        if testMode { fputs("launcher: backend exited \(code)\n", stderr) }
         if code != 0 && !stopping {
             report("聊天工具意外退出", "请重新打开 App。若仍失败，请查看资源库/Application Support/ChatArchiveTool/logs/startup.log。")
         }
-        if stopping { NSApp.reply(toApplicationShouldTerminate: true) }
-        else { finish() } // In-page “退出工具” also exits the native application.
+        finish() // Child has exited, so the next termination request is immediate.
     }
 
     func report(_ title: String, _ message: String) {

@@ -398,7 +398,7 @@ def run(open_browser=True):
   ready_path=os.environ.get('CHATARCHIVE_LAUNCH_READY')
   if ready_path:
    ready=pathlib.Path(ready_path);temporary=ready.with_suffix('.tmp')
-   temporary.write_text(json.dumps({'url':url,'pid':os.getpid()}),encoding='utf-8')
+   temporary.write_text(json.dumps({'url':url,'pid':os.getpid(),'token':server.auth}),encoding='utf-8')
    temporary.replace(ready)
   if open_browser:threading.Thread(target=launch_browser,daemon=True).start()
   server.serve_forever(poll_interval=.2)
