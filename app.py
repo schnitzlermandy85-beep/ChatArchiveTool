@@ -62,7 +62,7 @@ def main():
         now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
         print('ChatArchive startup:', now.isoformat(), flush=True)
         print('Python:', sys.version.split()[0], '|', sys.executable, flush=True)
-        for relative in ('web/index.html', 'web/app.js', 'web/style.css', 'web/report.js'):
+        for relative in ('web/index.html', 'web/app.js', 'web/screenshots.js', 'web/style.css', 'web/report.js'):
             if not (ROOT / relative).is_file():
                 raise RuntimeError('Missing ' + relative + '. Extract the entire ZIP before launching ChatArchiveTool.')
         shared = ROOT.parent.parent / 'work/voice-runtime'
@@ -72,9 +72,6 @@ def main():
             sys.path.insert(0, str(site))
         from web_app import make_server, run
         if '--check' in sys.argv:
-            if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
-                from mac_wechat_setup import self_check
-                self_check()
             server = make_server()
             server.server_close()
             print('Startup check passed: imports, web assets and local HTTP binding.', flush=True)

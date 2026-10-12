@@ -68,8 +68,9 @@ def status():
             'wechatInstalled': False, 'wechatConfigured': False,
             'wechatConnection': {}, 'wechatPreflight': {}}
     if sys.platform == 'darwin':
-        from mac_wechat_setup import capability
-        result.update(capability())
+        result.update(wechatOfficialGuide=True, wechatReady=False, wechatConnection={
+            'code': 'official_guide', 'active': False, 'title': '使用微信官方导出到电脑',
+            'detail': '在手机选择联系人，传输完成后到电脑微信查看。本工具不读取微信进程或接收迁移数据。', 'topic': 'wechat'})
     return result
 
 
@@ -319,7 +320,9 @@ def open_setup(action):
         raise ValueError('这个设置入口仅用于 Mac')
     targets = {'full-disk-access': 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
                'developer-tools': 'x-apple.systempreferences:com.apple.preference.security?Privacy_DevTools'}
-    if action in targets:
+    if action == 'wechat-install-folder':
+        raise ValueError('旧版微信签名安装流程已停用，请查看“帮助 → 微信官方导出”')
+    elif action in targets:
         subprocess.run(['/usr/bin/open', targets[action]], check=True)
     elif action == 'install-tools':
         result = subprocess.run(['/usr/bin/xcode-select', '--install'], capture_output=True)

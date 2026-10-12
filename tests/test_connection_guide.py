@@ -48,7 +48,7 @@ class ConnectionGuideTests(unittest.TestCase):
 
     def test_retired_initialize_never_opens_terminal(self):
         with patch.object(desktop, 'open_terminal_script') as terminal:
-            with self.assertRaisesRegex(ValueError, '不再进行密码初始化'):
+            with self.assertRaisesRegex(ValueError, '旧版终端和直连入口已停用'):
                 desktop.initialize_wechat()
             terminal.assert_not_called()
 

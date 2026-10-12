@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-WECHAT_UNSUPPORTED = '微信直接读取支持 Windows 和 Mac；其他平台请导入已有档案。'
+WECHAT_UNSUPPORTED = '微信直接读取仅支持 Windows。Mac 请使用“微信官方导出”指引，在电脑微信查看记录；已有兼容文件可选择“整合已有导出”。'
 
 
 def data_root(source_root):
@@ -23,7 +23,7 @@ def data_root(source_root):
 
 
 def wechat_supported():
-    return sys.platform in ('win32', 'darwin')
+    return sys.platform == 'win32'
 
 
 def require_wechat_support():

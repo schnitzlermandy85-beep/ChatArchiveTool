@@ -59,16 +59,18 @@ def main():
             assert config['appVersion'] == (Path(__file__).resolve().parents[1] / 'VERSION').read_text().strip()
             if sys.platform == 'darwin':
                 assert config['wechatNative'] and config['wechatShareBundled']
-                assert config['wechatSupported'] and not config['wechatReady']
+                assert not config['wechatSupported'] and not config['wechatReady']
             if sys.platform == 'darwin':
-                assert config['wechatSupported'] is True
+                assert config['wechatOfficialGuide'] is True
                 assert config['wechatMac'] is True
-                assert config['wechatInstalled'] is True
+                assert config['wechatInstalled'] is False
+                assert not list(Path(executable).parent.parent.rglob('wechat_keys'))
                 assert config['qceInstalled'] is False
             assert 'id="help-view"' in page and 'id="help-search"' in page
             assert '会暂时退出微信' not in page
             assert 'data-component="install-qq"' in page
-            assert 'data-component="init-wechat"' in page
+            assert 'data-component="init-wechat"' not in page
+            assert 'id="wechat-official-guide"' in page
             inspection = api('analysis/inspect', {'archive': str(source)})
             preview = api('analysis/prepare', {'archive': str(source),
                 'selfId': inspection['participants'][0]['id'], 'relationship': 'friend', 'mode': 'local'})

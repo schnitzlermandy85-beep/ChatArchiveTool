@@ -9,7 +9,7 @@
 | `web/` | 导出和关系分析界面、请求预览、报告交互 |
 | `core.py` | QQ API、媒体关联、统一档案及本地语音转写 |
 | `wechat_adapter.py`、`wechat_worker.py`、`setup_wechat.py` | 微信适配、Windows 独立读取进程、可选组件安装 |
-| `desktop_exporters.py`、`mac_wechat.py` | 固定版本 QCE／wxvault 安装与终端启动、Mac 微信分片读取及媒体适配 |
+| `desktop_exporters.py`、`mac_wechat.py` | QCE 组件管理与启动；Mac 微信官方导出能力状态（旧读取实现仅保留为历史源码） |
 | `analysis_input.py` | 统一档案与 QCE JSON／JSONL／分块／ZIP 读取和校验 |
 | `relationship.py` | 身份、日期、脱敏、统计、完整分批、模型调用与综合校验 |
 | `psychology_frameworks.py` | 四种关系的主辅理论、八维定义、固定推断要求 |

@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 IDENTIFIER = 'com.chatarchivetool.desktop.WeChatShare'
-MAC_ROUTE = '旧版终端入口已停用，不再进行密码初始化。请打开新版界面，选择微信 → 直接导出，阅读说明后按准备、登录、连接三个步骤操作；也可以导入已有聊天文件。'
+MAC_ROUTE = '旧版终端和直连入口已停用。Mac 请在新版界面选择微信 → 微信官方导出，按手机步骤传输，完成后在电脑微信查看；已有兼容文件可选择整合已有导出。'
 
 
 def app_bundle():

@@ -3,6 +3,27 @@
 import AppKit
 import Darwin
 
+func authorizeWeChat(_ args: [String]) -> Never {
+    // Fixed operations only: this is not a general privileged command runner.
+    let command: String
+    if args == ["diagnose"] {
+        command = "/usr/bin/id -u"
+    } else {
+        fputs("Unsupported WeChat authorization operation\n", stderr); exit(1)
+    }
+    let wrapped = command + " 2>&1; result=$?; printf '\\nCHATARCHIVE_ADMIN_STATUS=%s\\n' \"$result\"; exit 0"
+    let literal = wrapped.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    guard let script = NSAppleScript(source: "do shell script \"" + literal + "\" with administrator privileges") else { exit(1) }
+    var error: NSDictionary?
+    let result = script.executeAndReturnError(&error)
+    if let error = error {
+        let code = (error["NSAppleScriptErrorNumber"] as? NSNumber)?.intValue ?? 1
+        fputs("Authorization failed (\(code))\n", stderr); exit(1)
+    }
+    FileHandle.standardOutput.write(Data((result.stringValue ?? "").utf8))
+    exit(0)
+}
+
 final class Launcher: NSObject, NSApplicationDelegate {
     let worker: URL
     let testMode: Bool
@@ -165,6 +186,7 @@ final class Launcher: NSObject, NSApplicationDelegate {
 let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
 let worker = executable.deletingLastPathComponent().appendingPathComponent("ChatArchiveToolBackend")
 let args = Array(CommandLine.arguments.dropFirst()).filter { !$0.hasPrefix("-psn_") }
+if args.first == "--wechat-admin" { authorizeWeChat(Array(args.dropFirst())) }
 if !args.isEmpty && args != ["--launcher-test"] {
     // CLI checks/helpers keep their exit status and PID; never start the AppKit shell.
     let values = ([worker.path] + args).map { strdup($0) } + [nil]

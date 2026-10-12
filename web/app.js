@@ -2,10 +2,11 @@
 const $=id=>document.getElementById(id);
 const auth=document.querySelector('meta[name="archive-token"]').content;
 let platform='QQ',mode='direct',selectedSession=null,sessionItems=[],state={},lastLog=0,toastTimer,closing=false,offlineNotified=false;
-let activeView='export',lastWechatStep='';
+let activeView='export';
+let screenshotPending=false;
 let wechatSupported=true,voiceAvailable=true,wechatMac=false;
 const analysis={inspection:null,sourcePath:'',previewId:null,preview:null,mode:'local',pending:false};
-function workspaceBusy(){return !!state.busy||analysis.pending;}
+function workspaceBusy(){return !!state.busy||analysis.pending||screenshotPending;}
 async function api(path,body){
  const options={headers:{'X-Archive-Token':auth}};
  if(body!==undefined){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}
@@ -25,19 +26,26 @@ function renderSessions(){
  $('session-total').textContent=items.length+' 个会话';
 }
 function updatePlatform(){
- if(platform==='WeChat'&&!wechatSupported&&mode==='direct'){mode='import';updateMode();}
+ if(platform==='WeChat'&&!wechatSupported&&!wechatMac&&mode==='direct'){mode='import';updateMode();}
  document.querySelectorAll('[data-platform]').forEach(button=>{const active=button.dataset.platform===platform;button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));});
  $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac||mode!=='import';
  $('source-badge').textContent=platform==='QQ'?'QQ':'微信';$('source-badge').classList.toggle('wechat-badge',platform==='WeChat');
  $('qq-fields').hidden=platform!=='QQ';$('wechat-fields').hidden=platform!=='WeChat';$('qq-advanced').hidden=platform!=='QQ';$('wechat-advanced').hidden=platform!=='WeChat';$('media-field').hidden=platform!=='QQ';
- $('import-hint').textContent=platform==='QQ'?'消息文件与媒体 ZIP 需来自同一会话、同一日期范围。':'Mac 微信可导入已有原生 ZIP 或聊天记录.txt；也支持 wechat-chat-export 的 chat_full_parsed.json 与文件夹。';
- refreshReadiness();closeMenu();
+ $('import-hint').textContent=platform==='QQ'?'消息文件与媒体 ZIP 需来自同一会话、同一日期范围。':'可导入兼容的聊天 ZIP、聊天记录.txt 或 chat_full_parsed.json 与媒体文件夹。Mac 官方传输记录位于电脑微信，不能在此直接导入。';
+ updateMode();
 }
+function officialWechat(){return platform==='WeChat'&&wechatMac&&mode==='direct';}
 function updateMode(){
+ const official=officialWechat();
+ $('wechat-official-guide').hidden=!official;
+ $('export-save-card').hidden=official;$('export-footer').hidden=official;$('export-result-column').hidden=official;
+ $('export-view').classList.toggle('official-layout',official);
+ document.querySelector('[data-mode="direct"]').textContent=platform==='WeChat'&&wechatMac?'微信官方导出':'直接导出';
  document.querySelectorAll('[data-mode]').forEach(button=>{const active=button.dataset.mode===mode;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
- $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac||mode!=='import';$('direct-fields').hidden=mode!=='direct';$('import-fields').hidden=mode!=='import';document.querySelector('.source-card>.advanced').hidden=mode!=='direct';refreshReadiness();closeMenu();
+ $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac||mode!=='import';$('direct-fields').hidden=mode!=='direct'||official;$('import-fields').hidden=mode!=='import';document.querySelector('.source-card>.advanced').hidden=mode!=='direct'||official;refreshReadiness();closeMenu();
 }
 function ready(){
+ if(officialWechat())return false;
  if(!$('output').value.trim())return false;
  if(mode==='import')return !!$('source').value.trim()&&(platform!=='QQ'||!!$('media').value.trim());
  return platform==='QQ'?selectedSession!==null:!!$('keyword').value.trim()&&!!state.wechatReady;
@@ -51,16 +59,12 @@ function refreshReadiness(){
  document.querySelectorAll('[data-component]').forEach(b=>b.disabled=busy);
  $('install-qq').disabled=busy||state.qceInstallSupported===false;
  $('start-qq').disabled=busy||!state.qceInstalled;
- $('init-wechat').disabled=busy||!state.wechatInstalled||!$('wechat-consent').checked;
- $('install-wechat-mac').disabled=busy||!state.wechatInstalled||!$('wechat-consent').checked;
- $('restore-wechat').disabled=busy||!$('wechat-consent').checked;
- $('check-wechat').disabled=busy||!state.wechatReady;
- document.querySelector('[data-mode="direct"]').disabled=busy||(platform==='WeChat'&&!wechatSupported);
+ document.querySelector('[data-mode="direct"]').disabled=busy||(platform==='WeChat'&&!wechatSupported&&!wechatMac);
  $('enable-wechat-share').disabled=busy;
  $('transcribe').disabled=busy||!voiceAvailable;
- document.querySelectorAll('[data-help],#wechat-step-help').forEach(b=>b.disabled=false);
+ document.querySelectorAll('[data-help]').forEach(b=>b.disabled=false);
  $('connect').disabled=busy;$('connect').classList.toggle('spinning',busy&&state.operation==='connect');$('connect').querySelector('span').textContent=busy&&state.operation==='connect'?'连接中':sessionItems.length?'刷新':'准备并连接 QQ';$('session-button').disabled=busy||!sessionItems.length;
- $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?(platform==='WeChat'?'选择一个聊天 ZIP 即可开始':'选择消息文件与媒体后即可开始'):platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':(wechatMac?('按步骤准备读取、登录微信，再连接并检查'):'在来源设置中安装微信组件');
+ $('ready-hint').textContent=busy?(state.status==='stopping'?'正在安全结束当前任务':state.operation==='analyze'||analysis.pending?'正在处理关系分析，请稍候':'正在创建档案，请稍候'):ready()?'设置已就绪，可以开始':mode==='import'?(platform==='WeChat'?'选择一个聊天 ZIP 即可开始':'选择消息文件与媒体后即可开始'):platform==='QQ'?'连接 QQ 并选择会话后即可开始':state.wechatReady?'填写好友或群名后即可开始':(wechatMac?('请按手机与电脑微信的提示传输记录'):'在来源设置中安装微信组件');
  refreshAnalysisReadiness();
 }
 function renderLogs(logs){
@@ -74,15 +78,11 @@ function renderComponents(data){
  if(data.wechatMac!==undefined)wechatMac=!!data.wechatMac;
  if(data.wechatSupported!==undefined)wechatSupported=!!data.wechatSupported;
  $('app-version').textContent=data.appVersion||'dev';
- $('wechat-mac-setup').hidden=!wechatMac;
  $('wechat-native-guide').hidden=platform!=='WeChat'||!wechatMac||mode!=='import';
- renderWechatStep(data.wechatPreflight?.blocked&&!data.wechatReady?data.wechatPreflight:(data.wechatConnection||{}));
- $('wechat-import-route').hidden=!wechatMac;
- $('wechat-experimental-note').hidden=!!data.wechatPreflight?.blocked;
  document.querySelectorAll('.mac-only').forEach(el=>el.hidden=!wechatMac);
  $('qq-component-status').textContent=data.qceInstalled?'QQ 导出组件已安装':'尚未安装内置 QQ 导出组件；也可连接已有本机服务';
- $('wechat-ready').textContent=data.wechatPreflight?.blocked&&!data.wechatReady?data.wechatPreflight.title:!wechatSupported?'此 Mac 暂支持导入；微信直读需要 Apple 芯片':data.wechatReady?'微信读取配置已就绪；可检查连接或开始导出':wechatMac?(data.wechatInstalled?'组件已安装，请连接已登录微信':'请先安装微信 Mac 导出组件'):'首次使用需要安装微信组件';
- $('wechat-platform-hint').textContent=wechatMac?'Mac 默认自动查找账号。多账号时可选择当前账号的 db_storage 文件夹，再连接。':'适配 Windows 微信 4.1.12+；手机记录需先迁移或同步到电脑。';
+ $('wechat-ready').textContent=data.wechatPreflight?.blocked&&!data.wechatReady?data.wechatPreflight.title:!wechatSupported?'请选择微信官方导出指引或整合已有文件':data.wechatReady?'微信读取配置已就绪；可检查连接或开始导出':wechatMac?(data.wechatInstalled?'组件已安装，请连接已登录微信':'请先安装微信 Mac 导出组件'):'首次使用需要安装微信组件';
+ $('wechat-platform-hint').textContent=wechatMac?'Mac 使用微信官方传输，在电脑微信中查看记录。':'适配 Windows 微信 4.1.12+；手机记录需先迁移或同步到电脑。';
  if(data.desktopOS==='darwin')$('qq-setup-hint').textContent=data.qceInstallSupported?'先完全退出桌面 QQ（⌘Q），再点“准备并连接 QQ”并扫码，好友列表会自动加载。组件会创建独立运行副本并重新签名，与桌面 QQ 共享本机数据；导出期间不要同时打开桌面 QQ。':'Intel Mac 暂无 QCE 原生安装包；可连接自行部署并共享导出目录的本机 QCE 服务，或导入已有文件。';
 }
 function renderState(data){
@@ -103,16 +103,17 @@ function renderState(data){
  $('after-export-analysis').hidden=!data.result||data.summary?.analysisEligible===false;$('analyze-export').disabled=workspaceBusy();
  renderAnalysisState(data);renderLogs(data.logs||[]);refreshReadiness();
 }
-function payload(){return {platform,mode,session:selectedSession,address:$('address').value,token:$('token').value,keyword:$('keyword').value,dbDir:$('db-dir').value,source:$('source').value,media:$('media').value,begin:mode==='import'?'':$('begin').value,end:mode==='import'?'':$('end').value,output:$('output').value,model:$('model').value,roaming:$('roaming').checked,transcribe:$('transcribe').checked,allowResign:$('wechat-consent').checked};}
+function payload(){return {platform,mode,session:selectedSession,address:$('address').value,token:$('token').value,keyword:$('keyword').value,dbDir:$('db-dir').value,source:$('source').value,media:$('media').value,begin:mode==='import'?'':$('begin').value,end:mode==='import'?'':$('end').value,output:$('output').value,model:$('model').value,roaming:$('roaming').checked,transcribe:$('transcribe').checked};}
 async function action(name,body={}){try{await api(name,body);renderState(await api('state'));return true;}catch(e){toast(e.message);return false;}}
 function openArchive(){if(state.result)window.open('/archive/index.html','_blank','noopener');}
 function showLogs(){if(!$('logs-dialog').open)$('logs-dialog').showModal();$('log-list').scrollTop=$('log-list').scrollHeight;}
 
 function showView(view){
- if(!['export','analysis','help'].includes(view))return;
+ if(!['export','screenshots','analysis','help'].includes(view))return;
  activeView=view;
- for(const name of ['export','analysis','help']){const active=name===view;$(name+'-view').hidden=!active;$('nav-'+name).classList.toggle('selected',active);$('tab-'+name).classList.toggle('active',active);$('nav-'+name).setAttribute('aria-current',active?'page':'false');}
- const copy={export:['聊天导出','CHAT ARCHIVE','让每段聊天，都有归档。','把文字、图片和语音整理在一起，随时回看，方便分析。'],analysis:['关系分析','RELATIONSHIP REFLECTION','在对话里，看见彼此。','选择关系视角，回顾你们的互动，描绘聊天中的双方形象。'],help:['使用帮助','YOUR GUIDE','从连接到导出，每一步都有说明。','按主题找到下一步，无需先学会终端或 API。']}[view];
+ document.querySelector(".platforms").hidden=view==='screenshots';document.querySelector(".source-label").hidden=view==='screenshots';
+ for(const name of ['export','screenshots','analysis','help']){const active=name===view;$(name+'-view').hidden=!active;$('nav-'+name).classList.toggle('selected',active);$('tab-'+name).classList.toggle('active',active);$('nav-'+name).setAttribute('aria-current',active?'page':'false');}
+ const copy={screenshots:['截图导入','LOCAL SCREENSHOT IMPORT','让截图里的对话，变成可读档案。','本地识别 · 人工核对 · 无需 API 或微信密钥'],export:['聊天导出','CHAT ARCHIVE','让每段聊天，都有归档。','把文字、图片和语音整理在一起，随时回看，方便分析。'],analysis:['关系分析','RELATIONSHIP REFLECTION','在对话里，看见彼此。','选择关系视角，回顾你们的互动，描绘聊天中的双方形象。'],help:['使用帮助','YOUR GUIDE','从连接到导出，每一步都有说明。','按主题找到下一步，无需先学会终端或 API。']}[view];
  document.querySelector('.breadcrumb span').textContent=copy[0];$('page-eyebrow').textContent=copy[1];$('page-title').textContent=copy[2];$('page-subtitle').textContent=copy[3];
  if(view==='analysis'&&!$('analysis-archive').value.trim()&&state.analysisArchive)$('analysis-archive').value=state.analysisArchive;
  refreshReadiness();
@@ -126,15 +127,6 @@ function openHelp(topic='start'){
  $('help-search').value='';filterHelp();showView('help');
  const section=$('help-'+(['start','qq','wechat','permissions','terminal','api','files','trouble'].includes(topic)?topic:'start'));
  section.scrollIntoView({behavior:'smooth',block:'start'});section.focus({preventScroll:true});
-}
-function renderWechatStep(step){
- const signature=JSON.stringify(step);if(signature===lastWechatStep)return;lastWechatStep=signature;
- $('wechat-step-title').textContent=step.title||'先准备组件，再连接微信';
- $('wechat-step-detail').textContent=step.detail||'保持日常使用的微信登录。首次连接使用 macOS 系统授权弹窗。';
- $('cancel-wechat').hidden=!step.active;$('cancel-wechat').disabled=step.code==='cancelling';
- $('wechat-next-actions').replaceChildren();
- const actions={disk_permission:[['full-disk-access','打开完全磁盘访问']],tools_missing:[['install-tools','安装系统工具']],wechat_not_running:[['open-wechat','打开微信']],password:[['show-terminal','显示终端']],terminal_pending:[['show-terminal','显示终端']],cancelling:[['show-terminal','显示终端']]};
- for(const [actionName,label] of actions[step.code]||[]){const button=document.createElement('button');button.type='button';button.className='button secondary small';button.textContent=label;button.addEventListener('click',()=>action('setup',{action:actionName}));$('wechat-next-actions').append(button);}
 }
 async function connectQQ(){
  selectedSession=null;$('session-button').querySelector('span').textContent='连接后选择好友或群聊';$('session-button').classList.remove('has-value');
@@ -260,14 +252,10 @@ async function poll(){if(closing)return;try{renderState(await api('state'));offl
 $('help-search').addEventListener('input',filterHelp);
 document.querySelectorAll('[data-help]').forEach(button=>button.addEventListener('click',()=>openHelp(button.dataset.help)));
 document.querySelectorAll('[data-setup]').forEach(button=>button.addEventListener('click',()=>action('setup',{action:button.dataset.setup})));
-$('wechat-step-help').addEventListener('click',()=>openHelp(state.wechatPreflight?.blocked?'wechat':state.wechatConnection?.topic||'wechat'));
-$('wechat-import-route').addEventListener('click',()=>{mode='import';updateMode();toast('选择上游导出的 chat_full_parsed.json 或整个结果文件夹。');});
-$('cancel-wechat').addEventListener('click',()=>action('wechat-cancel'));
+$('wechat-import-route').addEventListener('click',()=>{mode='import';updateMode();toast('选择已有兼容导出文件；手机“导出到电脑”的记录请在电脑微信查看。');});
 $('help-to-export').addEventListener('click',()=>showView('export'));
 $('help-to-analysis').addEventListener('click',()=>showView('analysis'));
 
 $('qce-upstream-ui').addEventListener('click',()=>action('qce-ui',{address:$('address').value.trim(),token:$('token').value.trim()}));
 
 $('enable-wechat-share').addEventListener('click',async()=>{const button=$('enable-wechat-share');button.disabled=true;try{const result=await api('wechat-share',{});$('wechat-share-status').textContent=result.message;}catch(e){$('wechat-share-status').textContent=e.message;}finally{button.disabled=false;}});
-
-$('wechat-consent').addEventListener('change',refreshReadiness);

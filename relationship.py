@@ -421,6 +421,8 @@ def prepare_analysis(path, relationship, options=None):
     if relationship not in RELATIONSHIPS:
         raise ValueError("请选择朋友、亲人、恋人或闺蜜／亲密朋友")
     source, records, original_people, quality = _load_archive(path)
+    if quality["historyCompleteness"] == "screenshots_only" and quality["invalidTimes"]:
+        raise ValueError("截图档案有未知时间，请先核对并补充完整时间后再分析；仍可打开档案浏览。")
     if quality["unresolvedSenders"]:
         raise ValueError(f"有 {quality['unresolvedSenders']} 条消息无法确认发送者；请修复导出身份映射后再分析")
     if len(original_people) != 2 or quality["isGroup"]:
@@ -913,6 +915,8 @@ def analyze_prepared(prepared, api_config=None, log=print, stop=None):
     else:
         limitations.append("本地模式仅提供描述性统计和关系模板提示，未进行语义心理分析。")
         limitations.append("本地词句候选使用公开的关键词规则，可能遗漏、误匹配或包含否定、引用；词句出现不代表真实态度。")
+    if preview["quality"].get("historyCompleteness") == "screenshots_only":
+        limitations.append("本档案仅覆盖人工选取的截图，文字、发送者和时间由 OCR 及人工核对产生；可能漏记、误识别或重复，不能代表完整聊天历史。")
     if preview["quality"]["invalidTimes"]:
         limitations.append(f"已排除 {preview['quality']['invalidTimes']} 条时间无效的消息。")
     if preview["quality"]["identityFromNames"]:

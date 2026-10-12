@@ -56,7 +56,7 @@ def _meta(manifest, source, source_format):
               "expectedMessageCount": _expected_count(manifest),
               "chat": chat, "fileCount": 1}
     completeness = manifest.get("historyCompleteness")
-    if completeness in ("unknown", "complete", "partial", "unverified"):
+    if completeness in ("unknown", "complete", "partial", "unverified", "screenshots_only"):
         result["historyCompleteness"] = completeness
     return result
 

@@ -9,6 +9,7 @@ from relationship import inspect_archive,prepare_analysis,analyze_prepared
 from relationship_report import write_report
 import desktop_exporters
 import native_share
+import screenshot_import
 from platform_support import data_root,wechat_supported,require_wechat_support,open_folder,voice_available
 
 def model_path():
@@ -32,6 +33,7 @@ class Controller:
  def __init__(self):
   self.lock=threading.RLock();self.stop=threading.Event();self.last=None;self.sessions=[];self.token='';self.logs=[];self.seq=0
   self.analysis_last=None;self.analysis_preview=None
+  self.screenshots=screenshot_import.ScreenshotImport()
   self.state={'busy':False,'operation':None,'status':'ready','stage':'准备好后，开始创建你的聊天档案。','progress':None,'messageCount':None,'voiceCount':None,'result':False,'summary':None,'connection':'未连接','wechatSupported':wechat_supported(),'wechatReady':wechat_supported() and (runtime_path()/'wechatauto').exists()}
   self.state.update(desktop_exporters.status(),**native_share.share_status())
   if sys.platform=='darwin':self.state['wechatReady']=desktop_exporters.status().get('wechatReady',False)
@@ -102,7 +104,7 @@ class Controller:
    require_wechat_support()
    if not keyword:raise ValueError('请填写微信好友准确备注、昵称或群名')
    if dbdir and not pathlib.Path(dbdir).is_dir():raise ValueError('微信数据目录不存在')
-   if not self.snapshot()['wechatReady']:raise ValueError('请先安装微信组件；Mac 还需要连接已登录微信并完成读取检查')
+   if not self.snapshot()['wechatReady']:raise ValueError('请先安装 Windows 微信组件')
    identity=[platform,keyword,dbdir,filters]
   else:
    if not src or not pathlib.Path(src).exists():raise ValueError('请选择消息导出文件或目录')
@@ -191,18 +193,8 @@ class Controller:
    with self.lock:self.state.update(wechatReady=True,status='installed',stage='微信组件已就绪，可以开始导出。',progress=100)
   self.launch('install',job)
  def component_action(self,action,payload=None):
-  if sys.platform=='darwin' and action in ('install-wechat','init-wechat','check-wechat','restore-wechat'):
-   import mac_wechat_setup
-   params=payload or {}
-   if action in ('install-wechat','restore-wechat','init-wechat') and params.get('allowResign') is not True:raise ValueError('请先勾选了解微信签名修改与重新登录，再继续')
-   def mac_job():
-    if action=='install-wechat':mac_wechat_setup.prepare(params.get('allowResign'),self.log,self.stop)
-    elif action=='init-wechat':mac_wechat_setup.connect(str(params.get('dbDir') or ''),self.log,self.stop)
-    elif action=='restore-wechat':mac_wechat_setup.restore(params.get('allowResign'),self.log)
-    else:mac_wechat_setup.check(self.log,self.stop)
-    with self.lock:self.state.update(status='ready',progress=None)
-   self.launch('component',mac_job)
-   return
+  if sys.platform=='darwin' and action in ('install-wechat','init-wechat','check-wechat','restore-wechat','diagnose-wechat','confirm-wechat-install'):
+   require_wechat_support()  # Retired Mac actions fail before any process/file access.
   if action not in ('install-qq','start-qq','prepare-qq','install-wechat','init-wechat','check-wechat'):raise ValueError('未知组件操作')
   def job():
    if action=='prepare-qq':
@@ -294,11 +286,11 @@ def make_server(controller=None,port=0):
    path=urllib.parse.urlsplit(self.path).path
    if path=='/':
     template=(ROOT/'web/index.html').read_text(encoding='utf-8').replace('__ARCHIVE_TOKEN__',auth);self.send(200,template.encode(),'text/html; charset=utf-8',cookie=True)
-   elif path in ('/style.css','/app.js'):
+   elif path in ('/style.css','/app.js','/screenshots.js'):
     f=ROOT/'web'/path[1:];self.send(200,f.read_bytes(),'text/css; charset=utf-8' if path.endswith('css') else 'text/javascript; charset=utf-8')
    elif path=='/api/state' and self.authenticated():self.send(200,controller.snapshot())
    elif path=='/api/diagnostics' and self.authenticated():self.send(200,desktop_exporters.diagnostics())
-   elif path=='/api/config' and self.authenticated():self.send(200,{'output':str(data_root(ROOT)/'exports'),**desktop_exporters.status(),**native_share.share_status(),'wechatSupported':wechat_supported(),'voiceAvailable':voice_available(),'model':model_path(),'address':'http://127.0.0.1:40653','tokenDetected':bool(controller.token),'wechatReady':controller.state['wechatReady']})
+   elif path=='/api/config' and self.authenticated():self.send(200,{'screenshotAvailable':screenshot_import.capability(),'output':str(data_root(ROOT)/'exports'),**desktop_exporters.status(),**native_share.share_status(),'wechatSupported':wechat_supported(),'voiceAvailable':voice_available(),'model':model_path(),'address':'http://127.0.0.1:40653','tokenDetected':bool(controller.token),'wechatReady':controller.state['wechatReady']})
    elif path.startswith('/archive/') or path.startswith('/analysis/'):
     cookie=self.headers.get('Cookie','')
     analysis_route=path.startswith('/analysis/')
@@ -316,10 +308,34 @@ def make_server(controller=None,port=0):
    if not self.allowed_host() or not self.authenticated() or (origin and origin!=expected):self.send(403,{'error':'请求验证失败'});return
    try:
     length=int(self.headers.get('Content-Length',0))
-    if not 0<length<=65536 or self.headers.get('Content-Type','').split(';')[0]!='application/json':raise ValueError('请求格式不正确')
+    route=urllib.parse.urlsplit(self.path).path
+    limit=12*1024*1024 if route=='/api/screenshots/upload' else 2*1024*1024 if route=='/api/screenshots/export' else 65536
+    if not 0<length<=limit or self.headers.get('Content-Type','').split(';')[0]!='application/json':raise ValueError('请求格式不正确')
     p=json.loads(self.rfile.read(length));path=urllib.parse.urlsplit(self.path).path
     if not isinstance(p,dict):raise ValueError('请求格式不正确')
-    if path=='/api/connect':controller.connect(p)
+    if path.startswith('/api/screenshots/'):
+     with controller.lock:
+      if controller.state['busy']:raise ValueError('请等待当前任务完成后再操作截图')
+      controller.stop.clear()
+      controller.state.update(busy=True,operation='screenshots',status='running',stage='正在本机处理截图',progress=None)
+     try:
+      if path=='/api/screenshots/reset':result=controller.screenshots.reset()
+      elif path=='/api/screenshots/upload':result=controller.screenshots.upload(p)
+      elif path=='/api/screenshots/export':
+       target,summary=controller.screenshots.export(p)
+       with controller.lock:
+        controller.last=target;controller.analysis_preview=None
+        controller.state.update(result=True,summary=summary,analysisArchive=str(target),messageCount=summary['messageCount'],voiceCount=0,progress=100)
+       result={'path':str(target),'summary':summary}
+      else:raise ValueError('未知截图操作')
+      with controller.lock:controller.state.update(status='complete' if path.endswith('/export') else 'ready',stage='截图档案已保存。仅包含已核对的截图内容。' if path.endswith('/export') else '截图识别完成，请在截图页面核对。')
+     except Exception:
+      with controller.lock:controller.state.update(status='error',stage='截图处理未完成，请查看截图页面提示。')
+      raise
+     finally:
+      with controller.lock:controller.state['busy']=False
+     self.send(200,result);return
+    elif path=='/api/connect':controller.connect(p)
     elif path=='/api/start':controller.start(p)
     elif path=='/api/analysis/inspect':self.send(200,controller.inspect_analysis(p));return
     elif path=='/api/analysis/prepare':self.send(200,controller.prepare_analysis(p));return

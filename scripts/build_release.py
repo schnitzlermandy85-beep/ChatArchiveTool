@@ -34,8 +34,8 @@ def main():
     if target is None:
         parser.error('Build on Windows x64 or macOS arm64/x86_64')
     if sys.platform == 'darwin':
-        from build_wechat_reader import build
-        build(ROOT / 'build/native/wechat_keys')
+        from build_screenshot_ocr import build as build_ocr
+        build_ocr()
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm',
                     '--distpath', str(ROOT / 'dist'), '--workpath', str(ROOT / 'build/pyinstaller'),
                     str(ROOT / 'ChatArchiveTool.spec')], cwd=ROOT, check=True,
@@ -61,7 +61,7 @@ def main():
     shutil.copytree(ROOT / 'examples', stage / 'examples')
     shutil.copytree(ROOT / 'vendor/licenses', stage / 'licenses')
     # Preserve runtime notices alongside the application's vendored licenses.
-    for package in ('pyinstaller', 'packaging', 'certifi', 'Pillow', 'zstandard') + (('sqlcipher3', 'pycryptodome', 'av', 'silk-python', 'cffi', 'pycparser') if sys.platform == 'darwin' else ()):
+    for package in ('pyinstaller', 'packaging', 'certifi', 'Pillow', 'zstandard'):
         metadata = distribution(package)
         for item in metadata.files or []:
             if '.dist-info/' in str(item) and any(word in item.name.lower() for word in ('license', 'copying', 'notice')):

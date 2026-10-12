@@ -189,11 +189,60 @@ class SetupTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, '退出微信'): setup.prepare(True)
             admin.assert_not_called()
 
+    def test_prepare_stages_without_privileged_writes(self):
+        with patch.object(setup.sys, 'platform', 'darwin'), patch.object(setup, 'scanner_path', return_value=Path(__file__)), patch.object(setup, 'app_path', return_value=Path('/Applications/WeChat.app')), patch.object(setup, 'running_pid', return_value=None), patch.object(setup, 'prepared', return_value=False), patch.object(setup, 'admin') as admin, patch('mac_wechat_install.stage') as stage:
+            setup.prepare(True)
+            stage.assert_called_once()
+            admin.assert_not_called()
+
     def test_private_keys_are_owner_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'keys.json'
             reader.private_json(path, {'test': 'synthetic'})
             if os.name != 'nt': self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_admin_reports_child_exit_separately_from_authorization(self):
+        import subprocess
+        cases = [
+            ('diagnose', 0, b'Operation not permitted: SECRET\nCHATARCHIVE_ADMIN_STATUS=1\n', b'', '拒绝此步骤'),
+            ('scan', 0, b'SECRET\nCHATARCHIVE_ADMIN_STATUS=4\n', b'', '拒绝读取微信进程'),
+            ('diagnose', 1, b'', b'failure SECRET (-600)', '错误码 -600'),
+            ('diagnose', 1, b'', b'User canceled. (-128)', '取消系统授权'),
+        ]
+        for operation, status, out, err, expected in cases:
+            response=subprocess.CompletedProcess([],status,out,err)
+            with self.subTest(operation=operation, expected=expected),patch.object(setup.subprocess,'run',return_value=response):
+                with self.assertRaisesRegex(ValueError,expected) as caught:
+                    setup.admin(['/usr/bin/true'],operation=operation)
+                self.assertNotIn('SECRET',str(caught.exception))
+
+    def test_admin_preserves_success_and_safe_shell_quoting(self):
+        import subprocess
+        payload=b'["synthetic key"]\rCHATARCHIVE_ADMIN_STATUS=0\r'
+        response=subprocess.CompletedProcess([],0,payload,b'')
+        with patch.object(setup.subprocess,'run',return_value=response) as run:
+            self.assertEqual(setup.admin(['/a path/test',"x\'$(false)"]),b'["synthetic key"]')
+            script=run.call_args.args[0][-1]
+            command=json.loads(script[len('do shell script '):-len(' with administrator privileges')])
+            import shlex
+            self.assertEqual(shlex.split(command.split(' 2>&1;')[0]),['/a path/test',"x\'$(false)"])
+
+    def test_packaged_authorization_only_dispatches_fixed_native_operations(self):
+        import subprocess
+        response = subprocess.CompletedProcess([], 0, b'0\nCHATARCHIVE_ADMIN_STATUS=0\n', b'')
+        with patch.object(setup.sys, 'frozen', True, create=True), patch.object(setup.sys, 'executable', '/test/ChatArchiveToolBackend'), patch.object(setup.subprocess, 'run', return_value=response) as run:
+            self.assertEqual(setup.admin(['/usr/bin/id', '-u']), b'0')
+            self.assertEqual(run.call_args.args[0], ['/test/ChatArchiveTool', '--wechat-admin', 'diagnose'])
+            run.reset_mock()
+            for operation in ('sign', 'restore'):
+                with self.assertRaisesRegex(ValueError, '已停用'):
+                    setup.admin(['/usr/bin/codesign', '--force', '--sign', '-', '/Applications/WeChat.app'], operation=operation)
+            run.assert_not_called()
+
+    def test_scan_permission_failure_does_not_claim_app_management_is_missing(self):
+        message = setup.admin_failure('scan', 1, b'Operation not permitted SECRET')
+        self.assertNotIn('修改微信', message)
+        self.assertNotIn('SECRET', message)
 
     def test_admin_failure_does_not_leak_backend_output(self):
         import subprocess
