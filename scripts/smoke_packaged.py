@@ -1,4 +1,6 @@
 """End-to-end verification of the packaged executable, with isolated synthetic data."""
+import base64
+import io
 import json
 import os
 import platform
@@ -47,11 +49,11 @@ def main():
                 page = response.read().decode('utf-8')
             token = re.search(r'name="archive-token" content="([^"]+)"', page).group(1)
 
-            def api(route, body=None):
+            def api(route, body=None, timeout=10):
                 request = urllib.request.Request(url + 'api/' + route,
                     data=json.dumps(body).encode() if body is not None else None,
                     headers={'X-Archive-Token': token, 'Content-Type': 'application/json'})
-                with urllib.request.urlopen(request, timeout=10) as response:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
                     return json.load(response)
 
             config = api('config')
@@ -66,6 +68,39 @@ def main():
                 assert config['wechatInstalled'] is False
                 assert not list(Path(executable).parent.parent.rglob('wechat_keys'))
                 assert config['qceInstalled'] is False
+            # Call OCR through the frozen app, never through the source-tree helper.
+            assert config['screenshotAvailable'] == (sys.platform == 'darwin')
+            if sys.platform == 'darwin':
+                from PIL import Image, ImageDraw, ImageFont
+                helper = Path(executable).parent.parent / 'Frameworks/screenshot-ocr'
+                assert helper.is_file() and os.access(helper, os.X_OK), helper
+                subprocess.run(['lipo', '-verify_arch', platform.machine(), str(helper)], check=True)
+                subprocess.run(['codesign', '--verify', '--strict', str(helper)], check=True)
+                fixture = Image.new('RGB', (1000, 300), 'white')
+                font = ImageFont.truetype('/System/Library/Fonts/Helvetica.ttc', 48)
+                ImageDraw.Draw(fixture).text((60, 100), 'Hello archive 123', font=font, fill='black')
+                stream = io.BytesIO()
+                fixture.save(stream, format='PNG')
+                generation = api('screenshots/reset', {})['generation']
+                upload = api('screenshots/upload', {
+                    'generation': generation,
+                    'data': base64.b64encode(stream.getvalue()).decode('ascii'),
+                }, timeout=120)
+                assert any('Hello archive 123' in row['text'] for row in upload['rows']), upload
+                row = next(row for row in upload['rows'] if 'Hello archive 123' in row['text'])
+                exported = api('screenshots/export', {
+                    'generation': generation, 'reviewed': True,
+                    'output': str(root / 'screenshot-result'), 'order': [upload['id']],
+                    'rows': [{**row, 'image': upload['id'], 'sender': 'self',
+                              'kind': 'text', 'time': '2026-10-12T10:00:00+08:00'}],
+                })
+                archive = Path(exported['path'])
+                record = json.loads((archive / 'messages.jsonl').read_text(encoding='utf-8'))
+                assert record['text'] == row['text']
+                assert record['sender']['isSelf'] is True and record['timestamp'] is not None
+                assert (archive / record['original']['path']).read_bytes() == stream.getvalue()
+                assert exported['summary']['historyCompleteness'] == 'screenshots_only'
+                print('PASS: bundled OCR architecture, signature, real Vision recognition and reviewed export')
             assert 'id="help-view"' in page and 'id="help-search"' in page
             assert '会暂时退出微信' not in page
             assert 'data-component="install-qq"' in page
