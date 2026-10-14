@@ -74,7 +74,7 @@ def main():
                 from PIL import Image, ImageDraw, ImageFont
                 helper = Path(executable).parent.parent / 'Frameworks/screenshot-ocr'
                 assert helper.is_file() and os.access(helper, os.X_OK), helper
-                subprocess.run(['lipo', '-verify_arch', platform.machine(), str(helper)], check=True)
+                subprocess.run(['lipo', str(helper), '-verify_arch', platform.machine()], check=True)
                 subprocess.run(['codesign', '--verify', '--strict', str(helper)], check=True)
                 fixture = Image.new('RGB', (1000, 300), 'white')
                 font = ImageFont.truetype('/System/Library/Fonts/Helvetica.ttc', 48)

@@ -26,11 +26,11 @@ class ScreenshotTests(unittest.TestCase):
    'rows':[{'image':image,'box':[.1,.2,.3,.1],'text':'人工核对文字 <script>','sender':'self','kind':'text','time':''}]}
  def test_unknown_time_and_source_preserved(self):
   image=self.upload();p=self.payload(image);target,summary=self.service.export(p)
-  row=json.loads((target/'messages.jsonl').read_text())
+  row=json.loads((target/'messages.jsonl').read_text(encoding='utf-8'))
   self.assertIsNone(row['timestamp']);self.assertEqual(row['time'],'时间未知')
   self.assertFalse(summary['analysisEligible']);self.assertEqual(summary['historyCompleteness'],'screenshots_only')
   self.assertTrue((target/row['original']['path']).is_file())
-  self.assertNotIn('<script>',(target/'data/messages-00000.js').read_text())
+  self.assertNotIn('<script>',(target/'data/messages-00000.js').read_text(encoding='utf-8'))
  def test_analysis_rejects_partial_dates(self):
   from relationship import prepare_analysis
   image=self.upload();p=self.payload(image)
@@ -42,7 +42,7 @@ class ScreenshotTests(unittest.TestCase):
   image=self.upload();p=self.payload(image);r=p['rows'][0];r.update(kind='sticker',time='2026-10-10T09:30:00+08:00')
   target,summary=self.service.export(p)
   with Image.open(target/'media/screenshot-00001.png') as im:self.assertEqual(im.size,(60,30))
-  self.assertTrue(summary['analysisEligible']);self.assertTrue(json.loads((target/'media-manifest.json').read_text())[0]['isScreenshotCrop'])
+  self.assertTrue(summary['analysisEligible']);self.assertTrue(json.loads((target/'media-manifest.json').read_text(encoding='utf-8'))[0]['isScreenshotCrop'])
  def test_review_required_and_invalid_input_never_published(self):
   image=self.upload();p=self.payload(image)
   for edit in [{'reviewed':False},{'generation':'old'},{'order':['../bad']}]:

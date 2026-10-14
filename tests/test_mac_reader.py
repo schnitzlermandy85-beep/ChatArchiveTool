@@ -232,7 +232,7 @@ class SetupTests(unittest.TestCase):
         response = subprocess.CompletedProcess([], 0, b'0\nCHATARCHIVE_ADMIN_STATUS=0\n', b'')
         with patch.object(setup.sys, 'frozen', True, create=True), patch.object(setup.sys, 'executable', '/test/ChatArchiveToolBackend'), patch.object(setup.subprocess, 'run', return_value=response) as run:
             self.assertEqual(setup.admin(['/usr/bin/id', '-u']), b'0')
-            self.assertEqual(run.call_args.args[0], ['/test/ChatArchiveTool', '--wechat-admin', 'diagnose'])
+            self.assertEqual(run.call_args.args[0], [str(Path('/test/ChatArchiveTool')), '--wechat-admin', 'diagnose'])
             run.reset_mock()
             for operation in ('sign', 'restore'):
                 with self.assertRaisesRegex(ValueError, '已停用'):
